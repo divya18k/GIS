@@ -1443,7 +1443,7 @@ const generatePointsOnPath = (path, count) => {
 
 const ModalWrapper = ({ children, title, onClose }) => (
     <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <div style={{ background: 'white', padding: '0', borderRadius: '8px', width: '95%', maxWidth: '1200px', display: 'flex', flexDirection: 'column', maxHeight:'90vh', overflow:'hidden' }}>
+        <div style={{ background: 'white', padding: '0', borderRadius: '8px', width: '95%', maxWidth: '1000px', display: 'flex', flexDirection: 'column', maxHeight:'90vh', overflow:'hidden' }}>
             <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'15px 20px', borderBottom:'1px solid #eee', background:'#fff'}}>
                 <h3 style={{margin:0, color:'#2A4480', fontSize:'18px'}}>{title}</h3>
                 <button onClick={onClose} style={{ background: '#ff4444', color: 'white', border: 'none', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontWeight:'bold', fontSize:'12px' }}>CLOSE</button>
@@ -1512,11 +1512,11 @@ const Dashboard = ({ user, role, onLogout, logAction }) => {
         if (searchDist) filtered = filtered.filter(s => s.district === searchDist);
         if (searchBlock) filtered = filtered.filter(s => s.block === searchBlock);
         if (searchGeneric) {
-            const term = searchGeneric.toLowerCase();
+            const lowerTerm = searchGeneric.toLowerCase();
             filtered = filtered.filter(s => 
-                (s.generatedFileName && s.generatedFileName.toLowerCase().includes(term)) ||
-                (s.routeName && s.routeName.toLowerCase().includes(term)) ||
-                (s.locationType && s.locationType.toLowerCase().includes(term))
+                (s.generatedFileName && s.generatedFileName.toLowerCase().includes(lowerTerm)) ||
+                (s.routeName && s.routeName.toLowerCase().includes(lowerTerm)) ||
+                (s.locationType && s.locationType.toLowerCase().includes(lowerTerm))
             );
         }
         if (searchDateFrom && searchDateTo) {
@@ -1663,29 +1663,60 @@ const Dashboard = ({ user, role, onLogout, logAction }) => {
     const getFilteredLogs = () => {
         if (!filterStart && !filterEnd) return logs;
         const start = new Date(filterStart).getTime();
-        const end = new Date(filterEnd).getTime() + 86400000; // Include full end day
+        const end = new Date(filterEnd).getTime() + 86400000;
         return logs.filter(log => {
             const logTime = new Date(log.isoTime).getTime();
             return logTime >= start && logTime <= end;
         });
     };
 
+    // --- FIXED MOBILE STYLES ---
     const styles = {
-        container: { display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'Arial, sans-serif' },
-        header: { padding: '10px 20px', background: '#1a237e', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems:'center', boxShadow:'0 2px 5px rgba(0,0,0,0.2)', zIndex:20 },
-        controls: { display:'flex', gap:'12px', alignItems:'center' },
-        select: { padding: '8px 12px', borderRadius: '4px', minWidth: '140px', border:'1px solid #ccc', background:'white', fontSize:'13px', cursor:'pointer' },
-        badge: { background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', marginLeft: '10px', border:'1px solid rgba(255,255,255,0.3)' },
-        btnGreen: { padding: '8px 16px', background: '#00e676', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize:'13px', boxShadow:'0 2px 4px rgba(0,0,0,0.2)' },
-        btnWhite: { padding: '8px 16px', background: '#fff', color: '#1a237e', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize:'13px', boxShadow:'0 2px 4px rgba(0,0,0,0.2)' },
-        btnRed: { padding: '8px 16px', background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize:'13px' },
+        container: { 
+            display: 'flex', 
+            flexDirection: 'column', 
+            height: '100dvh', // Use Dynamic Viewport Height for mobile browsers
+            width: '100vw',
+            fontFamily: 'Arial, sans-serif',
+            overflow: 'hidden',
+            position: 'fixed', // LOCKS THE SCREEN
+            top: 0, left: 0
+        },
+        header: { 
+            padding: '10px', 
+            background: '#1a237e', 
+            color: 'white', 
+            display: 'flex', 
+            alignItems: 'center',
+            justifyContent: 'space-between', 
+            boxShadow:'0 2px 5px rgba(0,0,0,0.2)', 
+            zIndex: 2000,
+            whiteSpace: 'nowrap', 
+            overflowX: 'auto', // Enable HORIZONTAL SCROLLING for header only
+            flexShrink: 0,
+            gap: '15px',
+            // Hide scrollbar for cleaner look
+            scrollbarWidth: 'none', 
+            msOverflowStyle: 'none'
+        },
+        
+        // Grouping controls to keep them inline
+        headerGroup: { display: 'flex', gap: '10px', alignItems: 'center' },
+
+        select: { padding: '6px', borderRadius: '4px', minWidth: '100px', border:'1px solid #ccc', background:'white', fontSize:'13px', cursor:'pointer' },
+        badge: { background: 'rgba(255,255,255,0.2)', padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', marginLeft: '5px', border:'1px solid rgba(255,255,255,0.3)' },
+        
+        btnGreen: { padding: '6px 12px', background: '#00e676', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize:'12px', whiteSpace: 'nowrap' },
+        btnWhite: { padding: '6px 12px', background: '#fff', color: '#1a237e', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize:'12px', whiteSpace: 'nowrap' },
+        btnRed: { padding: '6px 12px', background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize:'12px', whiteSpace: 'nowrap' },
+        
         table: { width: '100%', borderCollapse: 'collapse', fontSize:'13px' },
         th: { background: '#f9f9f9', padding: '12px', borderBottom: '2px solid #eee', textAlign: 'left', color:'#555', fontWeight:'bold' },
         td: { padding: '12px', borderBottom: '1px solid #f0f0f0', color:'#333' },
-        actionBtn: { padding:'4px 10px', borderRadius:'4px', border:'1px solid #ccc', background:'white', cursor:'pointer', marginRight:'5px', fontSize:'12px', fontWeight:'bold' },
+        actionBtn: { padding:'4px 8px', borderRadius:'4px', border:'1px solid #ccc', background:'white', cursor:'pointer', marginRight:'5px', fontSize:'12px', fontWeight:'bold' },
         statusDot: { height: '10px', width: '10px', borderRadius: '50%', display: 'inline-block', marginRight: '5px' },
         downloadBtn: { display:'inline-block', marginTop:'10px', padding:'10px 20px', background:'#2196f3', color:'white', textDecoration:'none', borderRadius:'5px', fontWeight:'bold' },
-        pickingBanner: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', background: '#ff4444', color: 'white', padding: '10px 20px', borderRadius: '30px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 9999, cursor:'pointer' },
+        pickingBanner: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', background: '#ff4444', color: 'white', padding: '10px 20px', borderRadius: '30px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 9999, cursor:'pointer', whiteSpace: 'nowrap' },
         filterBox: {display:'flex', gap:'10px', marginBottom:'15px', background:'#f5f5f5', padding:'15px', borderRadius:'6px', flexWrap:'wrap', alignItems:'center', border:'1px solid #e0e0e0'},
         searchInput: { padding: '8px 12px', borderRadius: '4px', border:'1px solid #ccc', minWidth:'200px' }
     };
@@ -1693,27 +1724,26 @@ const Dashboard = ({ user, role, onLogout, logAction }) => {
     return (
         <div style={styles.container}>
             <div style={styles.header}>
-                <div style={{display:'flex', alignItems:'center'}}>
-                    <strong style={{fontSize:'22px'}}>GIS</strong>
+                {/* Left Group: Logo + Dropdowns */}
+                <div style={styles.headerGroup}>
+                    <strong style={{fontSize:'20px'}}>GIS</strong>
                     <span style={styles.badge}>{role.toUpperCase()}</span>
-                    
-                    <div style={{marginLeft:'30px', display:'flex', gap:'10px'}}>
-                        <select style={styles.select} onChange={e=>setSelectedDistrict(e.target.value)}><option>District</option>{visibleDistricts.map(d=><option key={d}>{d}</option>)}</select>
-                        <select style={styles.select} onChange={e=>setSelectedBlock(e.target.value)}><option>Block</option>{blockOptions.map(b=><option key={b}>{b}</option>)}</select>
-                        <select style={styles.select} onChange={e=>setSelectedSpan(e.target.value)}><option>Span</option>{spanOptions.map(s=><option key={s}>{s}</option>)}</select>
-                        <select style={styles.select} onChange={e=>setSelectedRing(e.target.value)}><option>Ring (Opt)</option>{ringOptions.map(r=><option key={r}>{r}</option>)}</select>
-                    </div>
+                    <select style={styles.select} onChange={e=>setSelectedDistrict(e.target.value)}><option>District</option>{visibleDistricts.map(d=><option key={d}>{d}</option>)}</select>
+                    <select style={styles.select} onChange={e=>setSelectedBlock(e.target.value)}><option>Block</option>{blockOptions.map(b=><option key={b}>{b}</option>)}</select>
+                    <select style={styles.select} onChange={e=>setSelectedSpan(e.target.value)}><option>Span</option>{spanOptions.map(s=><option key={s}>{s}</option>)}</select>
+                    <select style={styles.select} onChange={e=>setSelectedRing(e.target.value)}><option>Ring</option>{ringOptions.map(r=><option key={r}>{r}</option>)}</select>
                 </div>
                 
-                <div style={styles.controls}>
-                    <button onClick={() => { setEditingSurvey(null); setIsViewOnly(false); setShowSurveyForm(true); }} style={styles.btnGreen}>+ New Survey</button>
-                    <button onClick={() => setShowSurveyTable(true)} style={styles.btnWhite}>View Data ({filteredSurveys.length})</button>
-                    {role === 'admin' && <button onClick={() => setShowUserStatus(true)} style={styles.btnWhite}>Logs & Status</button>}
-                    <button onClick={onLogout} style={styles.btnRed}>LOGOUT</button>
+                {/* Right Group: Buttons */}
+                <div style={styles.headerGroup}>
+                    <button onClick={() => { setEditingSurvey(null); setIsViewOnly(false); setShowSurveyForm(true); }} style={styles.btnGreen}>+ New</button>
+                    <button onClick={() => setShowSurveyTable(true)} style={styles.btnWhite}>Data ({filteredSurveys.length})</button>
+                    {role === 'admin' && <button onClick={() => setShowUserStatus(true)} style={styles.btnWhite}>Logs</button>}
+                    <button onClick={onLogout} style={styles.btnRed}>Logout</button>
                 </div>
             </div>
 
-            <MapContainer center={[17.3850, 78.4867]} zoom={11} style={{ flex: 1 }}>
+            <MapContainer center={[17.3850, 78.4867]} zoom={11} style={{ flex: 1, zIndex: 1 }}>
                 <MapPickHandler isPicking={isPickingLocation} onPick={handleMapClick} />
                 <LayersControl position="topright">
                     <LayersControl.BaseLayer checked name="Street"><TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /></LayersControl.BaseLayer>
@@ -1724,9 +1754,7 @@ const Dashboard = ({ user, role, onLogout, logAction }) => {
                 {startPoint && <Marker position={startPoint}><Popup>Source</Popup></Marker>}
                 {endPoint && <Marker position={endPoint}><Popup>Destination</Popup></Marker>}
                 {displayPath.length > 0 && <Polyline positions={displayPath} color={isRingView ? "#28a745" : "#007bff"} weight={isRingView ? 4 : 6} />}
-                
                 {userRoutes.map((route, idx) => ( <Polyline key={`usr-${idx}`} positions={[route.start, route.end]} color="red" weight={5} dashArray="5, 10"><Popup>User HDD Route: {route.name}</Popup></Polyline> ))}
-                
                 {diggingPoints.map((pt) => (<Marker key={pt.id} position={pt} icon={L.divIcon({ className: 'custom-dig-icon', html: `<div style="background-color: ${isRingView ? '#28a745' : '#ff8c00'}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>`, iconSize: [12, 12] })}><Popup><b>{pt.id}</b></Popup></Marker>))}
 
                 {submittedSurveys.map(s => s.latitude && (
@@ -1764,7 +1792,7 @@ const Dashboard = ({ user, role, onLogout, logAction }) => {
                         <input list="blkList" style={styles.select} placeholder="Search Block..." onChange={e=>setSearchBlock(e.target.value)} />
                         <datalist id="blkList">{blockOptions.map(b=><option key={b} value={b} />)}</datalist>
                         <input type="date" style={styles.select} onChange={e=>setSearchDateFrom(e.target.value)} />
-                        <span style={{display:'flex', alignItems:'center'}}>to</span>
+                        <span>to</span>
                         <input type="date" style={styles.select} onChange={e=>setSearchDateTo(e.target.value)} />
                     </div>
 
@@ -1805,9 +1833,10 @@ const Dashboard = ({ user, role, onLogout, logAction }) => {
             )}
 
             {showUserStatus && role === 'admin' && (
-                <ModalWrapper title="Admin Logs & User Status" onClose={() => setShowUserStatus(false)}>
-                    <div style={{display:'flex', gap:'20px', height:'100%'}}>
-                        <div style={{flex:1, borderRight:'1px solid #eee'}}>
+                <ModalWrapper title="Admin Logs" onClose={() => setShowUserStatus(false)}>
+                    <div style={{display:'flex', gap:'20px', height:'100%', flexDirection: 'column'}}>
+                         {/* Updated to Column for Mobile */}
+                        <div style={{flex:1, borderBottom:'1px solid #eee', paddingBottom:'10px'}}>
                             <h4 style={{margin:'0 0 10px 0', color:'#2e7d32'}}>Live User Status</h4>
                             <table style={styles.table}>
                                 <thead><tr><th style={styles.th}>User</th><th style={styles.th}>Status</th><th style={styles.th}>Duration</th></tr></thead>

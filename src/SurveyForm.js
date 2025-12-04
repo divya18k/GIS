@@ -908,7 +908,6 @@ const SurveyForm = ({ onClose, onPickLocation, pickedCoords, districts, blocks, 
         setFormData(prev => ({ ...prev, [name]: value })); 
     };
 
-    // Handle Native File Input (Camera/Files)
     const handleNativeFile = (e, fieldName) => {
         const file = e.target.files[0];
         if (file) {
@@ -937,16 +936,13 @@ const SurveyForm = ({ onClose, onPickLocation, pickedCoords, districts, blocks, 
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (viewOnly) return;
-
         if (VIDEO_REQUIRED_TYPES.includes(formData.locationType) && !formData.liveVideo && !initialData) { alert("⚠️ Live Video Required"); return; }
-        // Photo is now required for ALL types as requested
         if (!formData.sitePhoto && !initialData) { alert("⚠️ Live Photo Required"); return; }
         
         const generatedFileName = formData.generatedFileName || generateFileName();
         onSubmitData({ ...formData, generatedFileName });
     };
 
-    // Button Styles
     const getBtnStyle = (file, isMandatory) => {
         if (file) return { background: '#2e7d32', color: 'white', border:'1px solid green' }; 
         if (isMandatory) return { background: '#d32f2f', color: 'white', border:'1px solid red' }; 
@@ -958,16 +954,25 @@ const SurveyForm = ({ onClose, onPickLocation, pickedCoords, districts, blocks, 
         container: { background: '#f4f6f8', width: '95%', maxWidth: '800px', maxHeight: '95%', borderRadius: '8px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow:'0 4px 20px rgba(0,0,0,0.3)' },
         header: { padding: '15px 20px', background: '#1a237e', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
         body: { flex: 1, overflowY: 'auto', padding: '20px' },
-        row: { display: 'flex', gap: '15px', marginBottom: '15px', flexWrap:'wrap' },
-        col: { flex: 1, minWidth:'200px' },
+        
+        // FORCED ROW LAYOUT
+        row: { display: 'flex', gap: '10px', marginBottom: '15px', flexDirection: 'row' },
+        col: { flex: 1 }, // Each column takes equal width
+        
         label: { display: 'block', marginBottom: '5px', fontSize: '12px', fontWeight: 'bold', color:'#333' },
         input: { width: '100%', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', background: viewOnly ? '#e9ecef' : 'white', fontSize:'14px', boxSizing:'border-box' },
         select: { width: '100%', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', background: viewOnly ? '#e9ecef' : 'white', fontSize:'14px', boxSizing:'border-box' },
         locSection: { background: 'white', padding: '15px', borderRadius: '6px', border: '1px solid #e0e0e0', marginBottom: '15px' },
-        btn: { padding:'10px', borderRadius:'4px', cursor: viewOnly ? 'not-allowed' : 'pointer', fontSize:'13px', width:'100%', textAlign:'center', fontWeight:'bold', display:'block', boxSizing:'border-box', border:'none', color:'white' },
-        gpsBtn: { padding: '8px 12px', background: '#2e7d32', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize:'12px', fontWeight:'bold' },
-        pickBtn: { padding: '8px 12px', background: '#0288d1', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize:'12px', fontWeight:'bold' },
-        mediaBtn: { padding:'12px', borderRadius:'4px', cursor:'pointer', fontSize:'13px', width:'100%', textAlign:'center', fontWeight:'bold', display:'block', boxSizing:'border-box' },
+        gpsBtn: { padding: '10px', width:'100%', background: '#2e7d32', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize:'12px', fontWeight:'bold' },
+        pickBtn: { padding: '10px', width:'100%', background: '#0288d1', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize:'12px', fontWeight:'bold' },
+        
+        fileLabel: {
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '12px', borderRadius: '4px', width: '100%', 
+            cursor: viewOnly ? 'default' : 'pointer', 
+            fontWeight: 'bold', fontSize: '13px', boxSizing: 'border-box',
+            textAlign: 'center'
+        },
         submitBtn: { width: '100%', padding: '15px', background: '#e65100', color: 'white', border: 'none', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer' }
     };
 
@@ -975,94 +980,79 @@ const SurveyForm = ({ onClose, onPickLocation, pickedCoords, districts, blocks, 
         <div style={styles.overlay}>
             <div style={styles.container}>
                 <div style={styles.header}>
-                    <h3 style={{margin:0}}>{viewOnly ? "View Survey Details" : (initialData ? "Edit Survey" : "New Survey")}</h3>
+                    <h3 style={{margin:0}}>{viewOnly ? "View Details" : (initialData ? "Edit Survey" : "New Survey")}</h3>
                     <button onClick={onClose} style={{background:'transparent', border:'none', color:'white', fontSize:'24px', cursor:'pointer'}}>×</button>
                 </div>
                 
                 <form style={styles.body} onSubmit={handleSubmit}>
                     
+                    {/* ROW 1 */}
                     <div style={styles.row}>
-                        <div style={styles.col}>
-                            <label style={styles.label}>1. District</label>
-                            <select name="district" value={formData.district} style={styles.select} onChange={handleChange} disabled={viewOnly} required>
-                                <option value="">Select</option>{districts.map(d=><option key={d}>{d}</option>)}
-                            </select>
-                        </div>
-                        <div style={styles.col}>
-                            <label style={styles.label}>2. Block</label>
-                            <select name="block" value={formData.block} style={styles.select} onChange={handleChange} disabled={viewOnly} required>
-                                <option value="">Select</option>{blocks.flat().map(b=><option key={b}>{b}</option>)}
-                            </select>
-                        </div>
+                        <div style={styles.col}><label style={styles.label}>District</label><select name="district" value={formData.district} style={styles.select} onChange={handleChange} disabled={viewOnly} required><option value="">Select</option>{districts.map(d=><option key={d}>{d}</option>)}</select></div>
+                        <div style={styles.col}><label style={styles.label}>Block</label><select name="block" value={formData.block} style={styles.select} onChange={handleChange} disabled={viewOnly} required><option value="">Select</option>{blocks.flat().map(b=><option key={b}>{b}</option>)}</select></div>
                     </div>
 
+                    {/* ROW 2 */}
                     <div style={styles.row}>
-                        <div style={styles.col}><label style={styles.label}>3. Route Name</label><input name="routeName" value={formData.routeName} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
-                        <div style={styles.col}><label style={styles.label}>4. Date (GPS)</label><input value={formData.dateTime} readOnly style={{...styles.input, background:'#e9ecef'}} /></div>
+                        <div style={styles.col}><label style={styles.label}>Route Name</label><input name="routeName" value={formData.routeName} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
+                        <div style={styles.col}><label style={styles.label}>Date (GPS)</label><input value={formData.dateTime} readOnly style={{...styles.input, background:'#e9ecef'}} /></div>
                     </div>
 
+                    {/* ROW 3 */}
                     <div style={styles.row}>
-                        <div style={styles.col}><label style={styles.label}>5. Start Loc</label><input name="startLocName" value={formData.startLocName} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
-                        <div style={styles.col}><label style={styles.label}>6. End Loc</label><input name="endLocName" value={formData.endLocName} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
+                        <div style={styles.col}><label style={styles.label}>Start Loc</label><input name="startLocName" value={formData.startLocName} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
+                        <div style={styles.col}><label style={styles.label}>End Loc</label><input name="endLocName" value={formData.endLocName} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
                     </div>
 
+                    {/* ROW 4 */}
                     <div style={styles.row}>
-                        <div style={styles.col}><label style={styles.label}>7. Ring No</label><input name="ringNumber" value={formData.ringNumber} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
+                        <div style={styles.col}><label style={styles.label}>Ring No</label><input name="ringNumber" value={formData.ringNumber} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
                         <div style={styles.col}><label style={styles.label}>Shot No</label><input name="shotNumber" value={formData.shotNumber} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
                     </div>
 
                     <div style={styles.locSection}>
-                        <label style={styles.label}>8. Location Point</label>
+                        <label style={styles.label}>Location Point</label>
                         {!viewOnly && (
-                            <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>
-                                <button type="button" onClick={handleGetGPS} style={styles.gpsBtn}>Get GPS</button>
-                                <button type="button" onClick={onPickLocation} style={styles.pickBtn}>Map Pick</button>
+                            <div style={styles.row}>
+                                <div style={styles.col}><button type="button" onClick={handleGetGPS} style={styles.gpsBtn}>Get GPS</button></div>
+                                <div style={styles.col}><button type="button" onClick={onPickLocation} style={styles.pickBtn}>Map Pick</button></div>
                             </div>
                         )}
-                        <div style={{display:'flex', gap:'10px'}}>
-                            <input value={formData.latitude} readOnly style={{...styles.input, background:'#e9ecef'}} placeholder="Lat" />
-                            <input value={formData.longitude} readOnly style={{...styles.input, background:'#e9ecef'}} placeholder="Lng" />
+                        <div style={styles.row}>
+                            <div style={styles.col}><input value={formData.latitude} readOnly style={{...styles.input, background:'#e9ecef'}} placeholder="Lat" /></div>
+                            <div style={styles.col}><input value={formData.longitude} readOnly style={{...styles.input, background:'#e9ecef'}} placeholder="Lng" /></div>
                         </div>
                     </div>
 
                     <div style={styles.locSection}>
-                        <label style={styles.label}>9. Location Type</label>
-                        <select name="locationType" value={formData.locationType} style={styles.select} onChange={handleChange} disabled={viewOnly} required>
-                            <option value="">Select Type</option>{LOCATION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
-                        </select>
+                        <label style={styles.label}>Location Type</label>
+                        <select name="locationType" value={formData.locationType} style={styles.select} onChange={handleChange} disabled={viewOnly} required><option value="">Select Type</option>{LOCATION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select>
                     </div>
 
-                    {/* MEDIA SECTION */}
                     <div style={styles.locSection}>
                         <h4 style={{marginTop:0, borderBottom:'1px solid #eee', paddingBottom:'5px'}}>Media Evidence</h4>
-                        
                         <div style={styles.row}>
-                            {/* Photo for EVERYONE */}
                             <div style={styles.col}>
-                                <label style={{...styles.mediaBtn, ...getBtnStyle(formData.sitePhoto, true)}}>
-                                    {formData.sitePhoto ? "Photo Captured ✅" : "Capture Live Photo"}
+                                <label style={{...styles.fileLabel, ...getBtnStyle(formData.sitePhoto, true)}}>
+                                    {formData.sitePhoto ? "Photo Captured ✅" : "📸 Capture Photo"}
                                     {!viewOnly && <input type="file" accept="image/*" onChange={(e) => handleNativeFile(e, 'sitePhoto')} style={{display:'none'}} />}
                                 </label>
                             </div>
-
-                            {/* Video only for specific types */}
                             {VIDEO_REQUIRED_TYPES.includes(formData.locationType) && (
                                 <div style={styles.col}>
-                                    <label style={{...styles.mediaBtn, ...getBtnStyle(formData.liveVideo, true)}}>
-                                        {formData.liveVideo ? "Video Recorded ✅" : "Record Live Video"}
+                                    <label style={{...styles.fileLabel, ...getBtnStyle(formData.liveVideo, true)}}>
+                                        {formData.liveVideo ? "Video Recorded ✅" : "🎥 Record Video"}
                                         {!viewOnly && <input type="file" accept="video/*" onChange={(e) => handleNativeFile(e, 'liveVideo')} style={{display:'none'}} />}
                                     </label>
                                 </div>
                             )}
                         </div>
-
-                        {/* GoPro */}
                         {VIDEO_REQUIRED_TYPES.includes(formData.locationType) && (
                             <div style={styles.row}>
                                 <div style={styles.col}>
-                                    <label style={{...styles.mediaBtn, background: formData.goproVideo ? 'green' : (viewOnly ? 'grey' : '#0288d1'), color:'white'}}>
-                                        {formData.goproVideo ? "GoPro Uploaded ✅" : (viewOnly ? "GoPro: Pending" : "Upload GoPro")}
-                                        {!viewOnly && <input type="file" accept="video/*" style={{display:'none'}} onChange={(e) => handleNativeFile(e, 'goproVideo')} />}
+                                    <label style={{...styles.fileLabel, background: formData.goproVideo ? 'green' : (viewOnly ? '#9e9e9e' : '#0288d1'), color:'white'}}>
+                                        {formData.goproVideo ? "GoPro Uploaded ✅" : "📁 Upload GoPro (Opt)"}
+                                        {!viewOnly && <input type="file" accept="video/*" onChange={(e) => handleNativeFile(e, 'goproVideo')} style={{display:'none'}} />}
                                     </label>
                                 </div>
                             </div>
@@ -1077,16 +1067,16 @@ const SurveyForm = ({ onClose, onPickLocation, pickedCoords, districts, blocks, 
                         {!viewOnly && !initialData && (
                             <div style={styles.row}>
                                 <div style={styles.col}>
-                                    <label style={{...styles.mediaBtn, ...getBtnStyle(formData.selfie, true)}}>
-                                        {formData.selfie ? "Selfie Taken ✅" : "Take Team Selfie"}
-                                        <input type="file" accept="image/*" onChange={(e) => handleNativeFile(e, 'selfie')} style={{display:'none'}} />
+                                    <label style={{...styles.fileLabel, ...getBtnStyle(formData.selfie, true)}}>
+                                        {formData.selfie ? "Selfie Taken ✅" : "🤳 Take Team Selfie"}
+                                        <input type="file" accept="image/*" capture="user" onChange={(e) => handleNativeFile(e, 'selfie')} style={{display:'none'}} />
                                     </label>
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    {!viewOnly && <button type="submit" style={styles.submitBtn}>{initialData ? "UPDATE SURVEY" : "SUBMIT SURVEY"}</button>}
+                    {!viewOnly && <button type="submit" style={styles.submitBtn}>{initialData ? "UPDATE" : "SUBMIT"}</button>}
                 </form>
             </div>
         </div>
