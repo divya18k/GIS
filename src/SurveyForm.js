@@ -1314,6 +1314,7 @@
 
 
 
+
 import React, { useState, useEffect } from 'react';
 import GeoCamera from './GeoCamera';
 
@@ -1322,7 +1323,6 @@ const LOCATION_TYPES = [
     "Blowing Start Point", "Blowing End Point", "Coupler location", "splicing", "Other"
 ];
 
-// Only these types require Video
 const VIDEO_REQUIRED_TYPES = ["HDD Start Point", "HDD End Point", "Blowing Start Point", "Blowing End Point"];
 
 const SurveyForm = ({ onClose, onPickLocation, pickedCoords, districts, blocks, onSubmitData, user, initialData, viewOnly }) => {
@@ -1384,15 +1384,21 @@ const SurveyForm = ({ onClose, onPickLocation, pickedCoords, districts, blocks, 
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (viewOnly) return;
-
         if (VIDEO_REQUIRED_TYPES.includes(formData.locationType) && !formData.liveVideo && !initialData) { alert("⚠️ Live Video Required"); return; }
-        // Photo is now required for ALL types as requested
+        // Photo is now required for ALL types
         if (!formData.sitePhoto && !initialData) { alert("⚠️ Live Photo Required"); return; }
         
         const generatedFileName = formData.generatedFileName || generateFileName();
         onSubmitData({ ...formData, generatedFileName });
     };
 
+    const getBtnStyle = (file, isMandatory) => {
+        if (file) return { background: '#2e7d32', color: 'white', border:'1px solid green' }; 
+        if (isMandatory) return { background: '#d32f2f', color: 'white', border:'1px solid red' }; 
+        return { background: '#1976d2', color: 'white', border:'1px solid blue' }; 
+    };
+
+    // EXACT UI MATCHING YOUR SCREENSHOTS
     const styles = {
         overlay: { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', zIndex: 3000, display: 'flex', justifyContent: 'center', alignItems: 'center', fontFamily: 'Arial, sans-serif' },
         container: { background: '#f4f6f8', width: '95%', maxWidth: '800px', maxHeight: '95%', borderRadius: '8px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow:'0 4px 20px rgba(0,0,0,0.3)' },
@@ -1404,7 +1410,6 @@ const SurveyForm = ({ onClose, onPickLocation, pickedCoords, districts, blocks, 
         input: { width: '100%', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', background: viewOnly ? '#e9ecef' : 'white', fontSize:'14px', boxSizing:'border-box' },
         select: { width: '100%', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', background: viewOnly ? '#e9ecef' : 'white', fontSize:'14px', boxSizing:'border-box' },
         locSection: { background: 'white', padding: '15px', borderRadius: '6px', border: '1px solid #e0e0e0', marginBottom: '15px' },
-        btn: { padding:'10px', borderRadius:'4px', cursor: viewOnly ? 'not-allowed' : 'pointer', fontSize:'13px', width:'100%', textAlign:'center', fontWeight:'bold', display:'block', boxSizing:'border-box', border:'none', color:'white' },
         gpsBtn: { padding: '8px 12px', background: '#2e7d32', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize:'12px', fontWeight:'bold' },
         pickBtn: { padding: '8px 12px', background: '#0288d1', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize:'12px', fontWeight:'bold' },
         mediaBtn: { padding:'12px', borderRadius:'4px', cursor:'pointer', fontSize:'13px', width:'100%', textAlign:'center', fontWeight:'bold', display:'block', boxSizing:'border-box' },
@@ -1413,30 +1418,26 @@ const SurveyForm = ({ onClose, onPickLocation, pickedCoords, districts, blocks, 
 
     return (
         <div style={styles.overlay}>
-            {showGeoCamera && <GeoCamera mode={cameraMode} onCapture={handleCameraCapture} onClose={() => setShowGeoCamera(false)} metaData={{ district: formData.district, block: formData.block, route: formData.routeName }} />}
+            {showGeoCamera && (
+                <GeoCamera 
+                    mode={cameraMode} 
+                    onCapture={handleCameraCapture} 
+                    onClose={() => setShowGeoCamera(false)} 
+                    metaData={{ district: formData.district, block: formData.block, route: formData.routeName }} 
+                />
+            )}
             
             <div style={styles.container}>
                 <div style={styles.header}>
-                    <h3 style={{margin:0}}>{viewOnly ? "View Survey Details" : (initialData ? "Edit Survey" : "New Survey")}</h3>
+                    <h3 style={{margin:0}}>{viewOnly ? "View Details" : (initialData ? "Edit Survey" : "New Survey")}</h3>
                     <button onClick={onClose} style={{background:'transparent', border:'none', color:'white', fontSize:'24px', cursor:'pointer'}}>×</button>
                 </div>
                 
                 <form style={styles.body} onSubmit={handleSubmit}>
-                    
                     {/* 1. Basic Info */}
                     <div style={styles.row}>
-                        <div style={styles.col}>
-                            <label style={styles.label}>1. District</label>
-                            <select name="district" value={formData.district} style={styles.select} onChange={handleChange} disabled={viewOnly} required>
-                                <option value="">Select</option>{districts.map(d=><option key={d}>{d}</option>)}
-                            </select>
-                        </div>
-                        <div style={styles.col}>
-                            <label style={styles.label}>2. Block</label>
-                            <select name="block" value={formData.block} style={styles.select} onChange={handleChange} disabled={viewOnly} required>
-                                <option value="">Select</option>{blocks.flat().map(b=><option key={b}>{b}</option>)}
-                            </select>
-                        </div>
+                        <div style={styles.col}><label style={styles.label}>1. District</label><select name="district" value={formData.district} style={styles.select} onChange={handleChange} disabled={viewOnly} required><option value="">Select</option>{districts.map(d=><option key={d}>{d}</option>)}</select></div>
+                        <div style={styles.col}><label style={styles.label}>2. Block</label><select name="block" value={formData.block} style={styles.select} onChange={handleChange} disabled={viewOnly} required><option value="">Select</option>{blocks.flat().map(b=><option key={b}>{b}</option>)}</select></div>
                     </div>
 
                     <div style={styles.row}>
@@ -1444,7 +1445,7 @@ const SurveyForm = ({ onClose, onPickLocation, pickedCoords, districts, blocks, 
                         <div style={styles.col}><label style={styles.label}>4. Date (GPS)</label><input value={formData.dateTime} readOnly style={{...styles.input, background:'#e9ecef'}} /></div>
                     </div>
 
-                    {/* 2. Location Details */}
+                    {/* 2. Location */}
                     <div style={styles.row}>
                         <div style={styles.col}><label style={styles.label}>5. Start Loc</label><input name="startLocName" value={formData.startLocName} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
                         <div style={styles.col}><label style={styles.label}>6. End Loc</label><input name="endLocName" value={formData.endLocName} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
@@ -1455,66 +1456,47 @@ const SurveyForm = ({ onClose, onPickLocation, pickedCoords, districts, blocks, 
                         <div style={styles.col}><label style={styles.label}>Shot No</label><input name="shotNumber" value={formData.shotNumber} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
                     </div>
 
+                    {/* 3. Point */}
                     <div style={styles.locSection}>
                         <label style={styles.label}>8. Location Point</label>
-                        {!viewOnly && (
-                            <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}>
-                                <button type="button" onClick={handleGetGPS} style={styles.gpsBtn}>Get GPS</button>
-                                <button type="button" onClick={onPickLocation} style={styles.pickBtn}>Map Pick</button>
-                            </div>
-                        )}
-                        <div style={{display:'flex', gap:'10px'}}>
-                            <input value={formData.latitude} readOnly style={{...styles.input, background:'#e9ecef'}} placeholder="Lat" />
-                            <input value={formData.longitude} readOnly style={{...styles.input, background:'#e9ecef'}} placeholder="Lng" />
-                        </div>
+                        {!viewOnly && <div style={{display:'flex', gap:'10px', marginBottom:'10px'}}><button type="button" onClick={handleGetGPS} style={styles.gpsBtn}>Get GPS</button><button type="button" onClick={onPickLocation} style={styles.pickBtn}>Map Pick</button></div>}
+                        <div style={{display:'flex', gap:'10px'}}><input value={formData.latitude} readOnly style={{...styles.input, background:'#e9ecef'}} /><input value={formData.longitude} readOnly style={{...styles.input, background:'#e9ecef'}} /></div>
                     </div>
 
                     <div style={styles.locSection}>
                         <label style={styles.label}>9. Location Type</label>
-                        <select name="locationType" value={formData.locationType} style={styles.select} onChange={handleChange} disabled={viewOnly} required>
-                            <option value="">Select Type</option>{LOCATION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
-                        </select>
+                        <select name="locationType" value={formData.locationType} style={styles.select} onChange={handleChange} disabled={viewOnly} required><option value="">Select Type</option>{LOCATION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select>
                     </div>
 
-                    {/* MEDIA SECTION */}
+                    {/* 4. Media */}
                     <div style={styles.locSection}>
                         <h4 style={{marginTop:0, borderBottom:'1px solid #eee', paddingBottom:'5px'}}>Media Evidence</h4>
-                        
                         <div style={styles.row}>
-                            {/* Photo */}
                             <div style={styles.col}>
                                 {formData.sitePhoto ? (
-                                    <button type="button" style={{...styles.btn, background:'#2e7d32', cursor:'default'}}>Photo Captured ✅</button>
+                                    <button type="button" style={{...styles.btn, background:'green', cursor:'default'}}>Photo Captured ✅</button>
                                 ) : (
-                                    !viewOnly && !initialData && <button type="button" style={{...styles.mediaBtn, background:'#d32f2f', color:'white'}} onClick={() => { setCameraMode('photo'); setShowGeoCamera(true); }}>
-                                        <i className="fa-solid fa-camera"></i> Capture Live Photo
-                                    </button>
+                                    !viewOnly && !initialData && <button type="button" style={{...styles.mediaBtn, ...getBtnStyle(formData.sitePhoto, true)}} onClick={() => { setCameraMode('photo'); setShowGeoCamera(true); }}>Capture Live Photo</button>
                                 )}
                             </div>
-
-                            {/* Video */}
                             {VIDEO_REQUIRED_TYPES.includes(formData.locationType) && (
                                 <div style={styles.col}>
                                     {formData.liveVideo ? (
-                                        <button type="button" style={{...styles.btn, background:'#2e7d32', cursor:'default'}}>Video Recorded ✅</button>
+                                        <button type="button" style={{...styles.btn, background:'green', cursor:'default'}}>Video Recorded ✅</button>
                                     ) : (
-                                        !viewOnly && !initialData && <button type="button" style={{...styles.mediaBtn, background:'#d32f2f', color:'white'}} onClick={() => { setCameraMode('video'); setShowGeoCamera(true); }}>
-                                            <i className="fa-solid fa-video"></i> Record Live Video
-                                        </button>
+                                        !viewOnly && !initialData && <button type="button" style={{...styles.mediaBtn, ...getBtnStyle(formData.liveVideo, true)}} onClick={() => { setCameraMode('video'); setShowGeoCamera(true); }}>Record Live Video</button>
                                     )}
                                 </div>
                             )}
                         </div>
-
-                        {/* GoPro */}
                         {VIDEO_REQUIRED_TYPES.includes(formData.locationType) && (
                             <div style={styles.row}>
                                 <div style={styles.col}>
                                     {viewOnly ? (
-                                        <button type="button" style={{...styles.btn, background: formData.goproVideo ? '#2e7d32' : 'grey', color:'white'}}>GoPro: {formData.goproVideo ? "Uploaded" : "Pending"}</button>
+                                        <button type="button" style={{...styles.btn, background: formData.goproVideo ? 'green' : 'grey', color:'white'}}>GoPro: {formData.goproVideo ? "Uploaded" : "Pending"}</button>
                                     ) : (
-                                        <label style={{...styles.mediaBtn, background: formData.goproVideo ? '#2e7d32' : '#0288d1', color:'white'}}>
-                                            <i className="fa-solid fa-upload"></i> {formData.goproVideo ? "GoPro Uploaded ✅" : "Upload GoPro"}
+                                        <label style={{...styles.mediaBtn, background: formData.goproVideo ? 'green' : '#0288d1', color:'white'}}>
+                                            {formData.goproVideo ? "GoPro Uploaded ✅" : "Upload GoPro"}
                                             <input type="file" accept="video/*" style={{display:'none'}} onChange={handleFileChange} />
                                         </label>
                                     )}
@@ -1524,23 +1506,11 @@ const SurveyForm = ({ onClose, onPickLocation, pickedCoords, districts, blocks, 
                     </div>
 
                     <div style={styles.locSection}>
-                        <div style={styles.row}>
-                            <div style={styles.col}><label style={styles.label}>Name</label><input name="surveyorName" value={formData.surveyorName} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
-                            <div style={styles.col}><label style={styles.label}>Mobile</label><input name="surveyorMobile" value={formData.surveyorMobile} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
-                        </div>
-                        {!viewOnly && !initialData && (
-                            <div style={styles.row}>
-                                <div style={styles.col}>
-                                    <button type="button" style={{...styles.btn, background: formData.selfie ? '#2e7d32' : '#0288d1'}} onClick={() => { setCameraMode('selfie'); setShowGeoCamera(true); }}>
-                                        <i className="fa-solid fa-user"></i> {formData.selfie ? "Selfie Taken ✅" : "Take Team Selfie"}
-                                    </button>
-                                </div>
-                            </div>
-                        )}
+                        <div style={styles.row}><div style={styles.col}><label style={styles.label}>Name</label><input name="surveyorName" value={formData.surveyorName} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div><div style={styles.col}><label style={styles.label}>Mobile</label><input name="surveyorMobile" value={formData.surveyorMobile} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div></div>
+                        {!viewOnly && !initialData && <div style={styles.row}><div style={styles.col}><button type="button" style={{...styles.mediaBtn, ...getBtnStyle(formData.selfie, true)}} onClick={() => { setCameraMode('selfie'); setShowGeoCamera(true); }}>Take Team Selfie</button></div></div>}
                     </div>
 
                     {!viewOnly && <button type="submit" style={styles.submitBtn}>{initialData ? "UPDATE SURVEY" : "SUBMIT SURVEY"}</button>}
-
                 </form>
             </div>
         </div>
