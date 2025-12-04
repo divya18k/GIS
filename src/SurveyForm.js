@@ -1420,31 +1420,26 @@ const SurveyForm = ({ onClose, onPickLocation, pickedCoords, districts, blocks, 
                 
                 <form style={styles.body} onSubmit={handleSubmit}>
                     
-                    {/* Row 1 */}
                     <div style={styles.row}>
                         <div style={styles.col}><label style={styles.label}>1. District</label><select name="district" value={formData.district} style={styles.select} onChange={handleChange} disabled={viewOnly} required><option value="">Select</option>{districts.map(d=><option key={d}>{d}</option>)}</select></div>
                         <div style={styles.col}><label style={styles.label}>2. Block</label><select name="block" value={formData.block} style={styles.select} onChange={handleChange} disabled={viewOnly} required><option value="">Select</option>{blocks.flat().map(b=><option key={b}>{b}</option>)}</select></div>
                     </div>
 
-                    {/* Row 2 */}
                     <div style={styles.row}>
                         <div style={styles.col}><label style={styles.label}>3. Route Name</label><input name="routeName" value={formData.routeName} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
                         <div style={styles.col}><label style={styles.label}>4. Date (GPS)</label><input value={formData.dateTime} readOnly style={{...styles.input, background:'#e9ecef'}} /></div>
                     </div>
 
-                    {/* Row 3 */}
                     <div style={styles.row}>
                         <div style={styles.col}><label style={styles.label}>5. Start Loc</label><input name="startLocName" value={formData.startLocName} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
                         <div style={styles.col}><label style={styles.label}>6. End Loc</label><input name="endLocName" value={formData.endLocName} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
                     </div>
 
-                    {/* Row 4 */}
                     <div style={styles.row}>
                         <div style={styles.col}><label style={styles.label}>7. Ring No</label><input name="ringNumber" value={formData.ringNumber} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
                         <div style={styles.col}><label style={styles.label}>Shot No</label><input name="shotNumber" value={formData.shotNumber} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
                     </div>
 
-                    {/* Location Point */}
                     <div style={styles.locSection}>
                         <label style={styles.label}>8. Location Point</label>
                         {!viewOnly && (
@@ -1461,10 +1456,11 @@ const SurveyForm = ({ onClose, onPickLocation, pickedCoords, districts, blocks, 
 
                     <div style={styles.locSection}>
                         <label style={styles.label}>9. Location Type</label>
-                        <select name="locationType" value={formData.locationType} style={styles.select} onChange={handleChange} disabled={viewOnly} required><option value="">Select Type</option>{LOCATION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select>
+                        <select name="locationType" value={formData.locationType} style={styles.select} onChange={handleChange} disabled={viewOnly} required>
+                            <option value="">Select Type</option>{LOCATION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+                        </select>
                     </div>
 
-                    {/* MEDIA */}
                     <div style={styles.locSection}>
                         <h4 style={{marginTop:0, borderBottom:'1px solid #eee', paddingBottom:'5px'}}>Media Evidence</h4>
                         <div style={styles.row}>
@@ -1501,9 +1497,11 @@ const SurveyForm = ({ onClose, onPickLocation, pickedCoords, districts, blocks, 
                         )}
                     </div>
 
-                    {/* Surveyor */}
                     <div style={styles.locSection}>
-                        <div style={styles.row}><div style={styles.col}><label style={styles.label}>Name</label><input name="surveyorName" value={formData.surveyorName} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div><div style={styles.col}><label style={styles.label}>Mobile</label><input name="surveyorMobile" value={formData.surveyorMobile} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div></div>
+                        <div style={styles.row}>
+                            <div style={styles.col}><label style={styles.label}>Name</label><input name="surveyorName" value={formData.surveyorName} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
+                            <div style={styles.col}><label style={styles.label}>Mobile</label><input name="surveyorMobile" value={formData.surveyorMobile} style={styles.input} onChange={handleChange} readOnly={viewOnly} required /></div>
+                        </div>
                         {!viewOnly && !initialData && (
                             <div style={styles.row}>
                                 <div style={styles.col}>
