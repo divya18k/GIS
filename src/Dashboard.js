@@ -2496,7 +2496,7 @@
 
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, LayersControl, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, LayersControl, useMapEvents, Tooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import SurveyForm from './SurveyForm';
@@ -2505,6 +2505,7 @@ import {
     saveMediaToDisk, getMediaFromDisk, deleteMediaFromDisk 
 } from './db';
 
+// Icons
 const DefaultIcon = L.icon({ iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png", shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png", iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34] });
 L.Marker.prototype.options.icon = DefaultIcon;
 const SurveyIcon = L.divIcon({ className: 'custom-survey-icon', html: '<div style="background: #00e676; color: black; border-radius: 50%; width: 16px; height: 16px; border: 2px solid white; box-shadow: 0 0 5px black;"></div>', iconSize: [16, 16] });
@@ -2543,7 +2544,6 @@ const Dashboard = ({ user, role, onLogout, logAction }) => {
     const [pickedCoords, setPickedCoords] = useState(null);
     const [showSurveyTable, setShowSurveyTable] = useState(false);
     const [showUserStatus, setShowUserStatus] = useState(false);
-    
     const [currentMedia, setCurrentMedia] = useState(null);
     const [uploadModalId, setUploadModalId] = useState(null);
 
@@ -2568,17 +2568,13 @@ const Dashboard = ({ user, role, onLogout, logAction }) => {
             const term = searchGeneric.toLowerCase();
             filtered = filtered.filter(s => 
                 (s.generatedFileName && s.generatedFileName.toLowerCase().includes(term)) ||
-                (s.routeName && s.routeName.toLowerCase().includes(term)) ||
-                (s.locationType && s.locationType.toLowerCase().includes(term))
+                (s.routeName && s.routeName.toLowerCase().includes(term))
             );
         }
         if (searchDateFrom && searchDateTo) {
             const from = new Date(searchDateFrom).setHours(0,0,0,0);
             const to = new Date(searchDateTo).setHours(23,59,59,999);
-            filtered = filtered.filter(s => {
-                const sDate = new Date(s.id).getTime(); 
-                return sDate >= from && sDate <= to;
-            });
+            filtered = filtered.filter(s => { const t = new Date(s.id).getTime(); return t >= from && t <= to; });
         }
         setFilteredSurveys(filtered);
     }, [searchDist, searchBlock, searchGeneric, searchDateFrom, searchDateTo]);
@@ -2589,10 +2585,9 @@ const Dashboard = ({ user, role, onLogout, logAction }) => {
             const allSurveys = surveys || [];
             setSubmittedSurveys(allSurveys);
             applyFilters(allSurveys);
-
             setLogs(JSON.parse(localStorage.getItem('bsnl_logs')) || []);
             setUserStatuses(JSON.parse(localStorage.getItem('bsnl_users')) || []);
-
+            
             const routes = {};
             allSurveys.forEach(s => {
                 if (!routes[s.routeName]) routes[s.routeName] = {};
@@ -2605,15 +2600,8 @@ const Dashboard = ({ user, role, onLogout, logAction }) => {
         } catch(e) { console.error(e); }
     }, [applyFilters]);
 
-    useEffect(() => {
-        refreshData();
-        const interval = setInterval(refreshData, 5000); 
-        return () => clearInterval(interval);
-    }, [refreshData]);
-
-    useEffect(() => {
-        applyFilters(submittedSurveys);
-    }, [searchDist, searchBlock, searchGeneric, searchDateFrom, searchDateTo, submittedSurveys, applyFilters]);
+    useEffect(() => { refreshData(); const interval = setInterval(refreshData, 5000); return () => clearInterval(interval); }, [refreshData]);
+    useEffect(() => { applyFilters(submittedSurveys); }, [searchDist, searchBlock, searchGeneric, searchDateFrom, searchDateTo, submittedSurveys, applyFilters]);
 
     useEffect(() => {
         if (!selectedSpan) { setStartPoint(null); setEndPoint(null); setDisplayPath([]); setDiggingPoints([]); return; }
@@ -2658,19 +2646,14 @@ const Dashboard = ({ user, role, onLogout, logAction }) => {
                 logAction(user, 'SUBMITTED_SURVEY', `File: ${enrichedData.generatedFileName}`);
                 alert(`Saved!`);
             }
-            setShowSurveyForm(false);
-            setEditingSurvey(null);
-            setIsViewOnly(false);
-            refreshData();
+            setShowSurveyForm(false); setEditingSurvey(null); setIsViewOnly(false); refreshData();
         } catch (e) { console.error(e); alert("Error saving data."); }
     };
 
     const handleDeleteSurvey = async (id) => {
         if(window.confirm("Admin: Permanently delete this record?")) {
             await deleteSurveyFromDB(id);
-            await deleteMediaFromDisk(`video_${id}`);
-            await deleteMediaFromDisk(`photo_${id}`);
-            await deleteMediaFromDisk(`gopro_${id}`);
+            await deleteMediaFromDisk(`video_${id}`); await deleteMediaFromDisk(`photo_${id}`); await deleteMediaFromDisk(`gopro_${id}`);
             logAction(user, 'DELETED_DATA', `ID: ${id}`);
             refreshData();
         }
@@ -2686,9 +2669,7 @@ const Dashboard = ({ user, role, onLogout, logAction }) => {
                 await saveMediaToDisk(mediaId, file);
                 const updatedSurvey = { ...survey, goproVideo: url, goproId: mediaId };
                 await updateSurveyInDB(updatedSurvey);
-                alert("GoPro Uploaded!");
-                setUploadModalId(null);
-                refreshData();
+                alert("GoPro Uploaded!"); setUploadModalId(null); refreshData();
             }
         }
     };
@@ -2706,63 +2687,52 @@ const Dashboard = ({ user, role, onLogout, logAction }) => {
 
     const handlePickLocationStart = () => { setShowSurveyForm(false); setIsPickingLocation(true); };
     const handleMapClick = (latlng) => { setPickedCoords(latlng); setIsPickingLocation(false); setShowSurveyForm(true); };
+    const getSessionDuration = (loginTimeStr) => { if (!loginTimeStr) return '-'; const diffMs = new Date() - new Date(loginTimeStr); return `${Math.floor(diffMs / 60000)} mins`; };
+    const getFilteredLogs = () => { if (!filterStart && !filterEnd) return logs; const start = new Date(filterStart).getTime(); const end = new Date(filterEnd).getTime() + 86400000; return logs.filter(log => { const t = new Date(log.isoTime).getTime(); return t >= start && t <= end; }); };
 
-    const getSessionDuration = (loginTimeStr) => {
-        if (!loginTimeStr) return '-';
-        const diffMs = new Date() - new Date(loginTimeStr);
-        return `${Math.floor(diffMs / 60000)} mins`;
-    };
-
-    const getFilteredLogs = () => {
-        if (!filterStart && !filterEnd) return logs;
-        const start = new Date(filterStart).getTime();
-        const end = new Date(filterEnd).getTime() + 86400000;
-        return logs.filter(log => {
-            const logTime = new Date(log.isoTime).getTime();
-            return logTime >= start && logTime <= end;
-        });
-    };
-
+    // --- FIXED MOBILE LAYOUT STYLES ---
     const styles = {
-        container: { display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'Arial, sans-serif' },
-        header: { padding: '10px 20px', background: '#1a237e', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems:'center', boxShadow:'0 2px 5px rgba(0,0,0,0.2)', zIndex:20 },
-        controls: { display:'flex', gap:'12px', alignItems:'center' },
-        select: { padding: '8px 12px', borderRadius: '4px', minWidth: '140px', border:'1px solid #ccc', background:'white', fontSize:'13px', cursor:'pointer' },
-        badge: { background: 'rgba(255,255,255,0.2)', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', marginLeft: '10px', border:'1px solid rgba(255,255,255,0.3)' },
-        btnGreen: { padding: '8px 16px', background: '#00e676', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize:'13px', boxShadow:'0 2px 4px rgba(0,0,0,0.2)' },
-        btnWhite: { padding: '8px 16px', background: '#fff', color: '#1a237e', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize:'13px', boxShadow:'0 2px 4px rgba(0,0,0,0.2)' },
-        btnRed: { padding: '8px 16px', background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize:'13px' },
+        container: { display: 'flex', flexDirection: 'column', height: '100dvh', width:'100vw', fontFamily: 'Arial, sans-serif', overflow:'hidden', position:'fixed', top:0, left:0 },
+        
+        // Header: Always Row, Scrollable if narrow
+        header: { padding: '10px 15px', background: '#1a237e', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems:'center', boxShadow:'0 2px 5px rgba(0,0,0,0.2)', zIndex:2000, gap:'20px', overflowX:'auto', whiteSpace:'nowrap', flexShrink:0 },
+        
+        controls: { display:'flex', gap:'10px', alignItems:'center', flexShrink:0 },
+        headerLeft: { display:'flex', gap:'10px', alignItems:'center', flexShrink:0 },
+        
+        select: { padding: '8px 10px', borderRadius: '4px', minWidth: '100px', border:'1px solid #ccc', background:'white', fontSize:'13px', cursor:'pointer' },
+        badge: { background: 'rgba(255,255,255,0.2)', padding: '3px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', marginLeft: '8px' },
+        btnGreen: { padding: '8px 14px', background: '#00e676', color: '#000', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize:'12px', whiteSpace:'nowrap' },
+        btnWhite: { padding: '8px 14px', background: '#fff', color: '#1a237e', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize:'12px', whiteSpace:'nowrap' },
+        btnRed: { padding: '8px 14px', background: '#d32f2f', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize:'12px', whiteSpace:'nowrap' },
+        
         table: { width: '100%', borderCollapse: 'collapse', fontSize:'13px' },
         th: { background: '#f9f9f9', padding: '12px', borderBottom: '2px solid #eee', textAlign: 'left', color:'#555', fontWeight:'bold' },
         td: { padding: '12px', borderBottom: '1px solid #f0f0f0', color:'#333' },
-        actionBtn: { padding:'4px 10px', borderRadius:'4px', border:'1px solid #ccc', background:'white', cursor:'pointer', marginRight:'5px', fontSize:'12px', fontWeight:'bold' },
+        actionBtn: { padding:'4px 8px', borderRadius:'4px', border:'1px solid #ccc', background:'white', cursor:'pointer', marginRight:'5px', fontSize:'12px', fontWeight:'bold' },
         statusDot: { height: '10px', width: '10px', borderRadius: '50%', display: 'inline-block', marginRight: '5px' },
         downloadBtn: { display:'inline-block', marginTop:'10px', padding:'10px 20px', background:'#2196f3', color:'white', textDecoration:'none', borderRadius:'5px', fontWeight:'bold' },
         pickingBanner: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', background: '#ff4444', color: 'white', padding: '10px 20px', borderRadius: '30px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 9999, cursor:'pointer' },
         filterBox: {display:'flex', gap:'10px', marginBottom:'15px', background:'#f5f5f5', padding:'15px', borderRadius:'6px', flexWrap:'wrap', alignItems:'center', border:'1px solid #e0e0e0'},
-        searchInput: { padding: '8px 12px', borderRadius: '4px', border:'1px solid #ccc', minWidth:'200px' }
+        searchInput: { padding: '8px 12px', borderRadius: '4px', border:'1px solid #ccc', minWidth:'180px' }
     };
 
     return (
         <div style={styles.container}>
             <div style={styles.header}>
-                <div style={{display:'flex', alignItems:'center'}}>
-                    <strong style={{fontSize:'22px'}}>GIS</strong>
+                <div style={styles.headerLeft}>
+                    <strong style={{fontSize:'20px'}}>GIS</strong>
                     <span style={styles.badge}>{role.toUpperCase()}</span>
-                    
-                    <div style={{marginLeft:'30px', display:'flex', gap:'10px'}}>
-                        <select style={styles.select} onChange={e=>setSelectedDistrict(e.target.value)}><option>District</option>{visibleDistricts.map(d=><option key={d}>{d}</option>)}</select>
-                        <select style={styles.select} onChange={e=>setSelectedBlock(e.target.value)}><option>Block</option>{blockOptions.map(b=><option key={b}>{b}</option>)}</select>
-                        <select style={styles.select} onChange={e=>setSelectedSpan(e.target.value)}><option>Span</option>{spanOptions.map(s=><option key={s}>{s}</option>)}</select>
-                        <select style={styles.select} onChange={e=>setSelectedRing(e.target.value)}><option>Ring (Opt)</option>{ringOptions.map(r=><option key={r}>{r}</option>)}</select>
-                    </div>
+                    <select style={styles.select} onChange={e=>setSelectedDistrict(e.target.value)}><option>District</option>{visibleDistricts.map(d=><option key={d}>{d}</option>)}</select>
+                    <select style={styles.select} onChange={e=>setSelectedBlock(e.target.value)}><option>Block</option>{blockOptions.map(b=><option key={b}>{b}</option>)}</select>
+                    <select style={styles.select} onChange={e=>setSelectedSpan(e.target.value)}><option>Span</option>{spanOptions.map(s=><option key={s}>{s}</option>)}</select>
+                    <select style={styles.select} onChange={e=>setSelectedRing(e.target.value)}><option>Ring</option>{ringOptions.map(r=><option key={r}>{r}</option>)}</select>
                 </div>
-                
                 <div style={styles.controls}>
-                    <button onClick={() => { setEditingSurvey(null); setIsViewOnly(false); setShowSurveyForm(true); }} style={styles.btnGreen}>+ New Survey</button>
-                    <button onClick={() => setShowSurveyTable(true)} style={styles.btnWhite}>View Data ({filteredSurveys.length})</button>
-                    {role === 'admin' && <button onClick={() => setShowUserStatus(true)} style={styles.btnWhite}>Logs & Status</button>}
-                    <button onClick={onLogout} style={styles.btnRed}>LOGOUT</button>
+                    <button onClick={() => { setEditingSurvey(null); setIsViewOnly(false); setShowSurveyForm(true); }} style={styles.btnGreen}>+ New</button>
+                    <button onClick={() => setShowSurveyTable(true)} style={styles.btnWhite}>Data ({filteredSurveys.length})</button>
+                    {role === 'admin' && <button onClick={() => setShowUserStatus(true)} style={styles.btnWhite}>Logs</button>}
+                    <button onClick={onLogout} style={styles.btnRed}>Logout</button>
                 </div>
             </div>
 
@@ -2772,23 +2742,18 @@ const Dashboard = ({ user, role, onLogout, logAction }) => {
                     <LayersControl.BaseLayer checked name="Street"><TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" /></LayersControl.BaseLayer>
                     <LayersControl.BaseLayer name="Satellite"><TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" /></LayersControl.BaseLayer>
                 </LayersControl>
-                
                 {startPoint && <MapUpdater center={startPoint} />}
                 {startPoint && <Marker position={startPoint}><Popup>Source</Popup></Marker>}
                 {endPoint && <Marker position={endPoint}><Popup>Destination</Popup></Marker>}
                 {displayPath.length > 0 && <Polyline positions={displayPath} color={isRingView ? "#28a745" : "#007bff"} weight={isRingView ? 4 : 6} />}
-                
                 {userRoutes.map((route, idx) => ( <Polyline key={`usr-${idx}`} positions={[route.start, route.end]} color="red" weight={5} dashArray="5, 10"><Popup>User HDD Route: {route.name}</Popup></Polyline> ))}
-                
                 {diggingPoints.map((pt) => (<Marker key={pt.id} position={pt} icon={L.divIcon({ className: 'custom-dig-icon', html: `<div style="background-color: ${isRingView ? '#28a745' : '#ff8c00'}; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>`, iconSize: [12, 12] })}><Popup><b>{pt.id}</b></Popup></Marker>))}
-
+                
                 {submittedSurveys.map(s => s.latitude && (
                     <Marker key={s.id} position={[parseFloat(s.latitude), parseFloat(s.longitude)]} icon={SurveyIcon}>
                         <Popup minWidth={250}>
                             <div style={{fontSize:'13px', lineHeight:'1.6'}}>
-                                <div style={{background:'#1a237e', color:'white', padding:'5px 10px', borderRadius:'4px', fontWeight:'bold', marginBottom:'8px'}}>
-                                    {s.locationType}
-                                </div>
+                                <div style={{background:'#1a237e', color:'white', padding:'5px 10px', borderRadius:'4px', fontWeight:'bold', marginBottom:'8px'}}>{s.locationType}</div>
                                 <div><b>File:</b> {s.generatedFileName}</div>
                                 <div><b>Route:</b> {s.routeName}</div>
                                 <div><b>Loc:</b> {s.startLocName} ➝ {s.endLocName}</div>
@@ -2799,95 +2764,41 @@ const Dashboard = ({ user, role, onLogout, logAction }) => {
                                 </div>
                             </div>
                         </Popup>
+                        <Tooltip direction="top" offset={[0, -10]} opacity={1}><span style={{fontWeight:'bold'}}>{s.locationType}</span><br/>{s.routeName}</Tooltip>
                     </Marker>
                 ))}
                 {pickedCoords && !isPickingLocation && <Marker position={pickedCoords}><Popup>Picked</Popup></Marker>}
             </MapContainer>
 
-            {showSurveyForm && (
-                <SurveyForm onClose={() => setShowSurveyForm(false)} pickedCoords={pickedCoords} districts={DATA_HIERARCHY.districts} blocks={Object.values(DATA_HIERARCHY.blocks)} onSubmitData={handleSurveySubmit} user={user} onPickLocation={handlePickLocationStart} initialData={editingSurvey} viewOnly={isViewOnly} />
-            )}
-
+            {showSurveyForm && <SurveyForm onClose={() => setShowSurveyForm(false)} pickedCoords={pickedCoords} districts={DATA_HIERARCHY.districts} blocks={Object.values(DATA_HIERARCHY.blocks)} onSubmitData={handleSurveySubmit} user={user} onPickLocation={handlePickLocationStart} initialData={editingSurvey} viewOnly={isViewOnly} />}
+            
             {showSurveyTable && (
                 <ModalWrapper title="Survey Database" onClose={() => setShowSurveyTable(false)}>
                     <div style={styles.filterBox}>
-                        <input type="text" style={styles.searchInput} placeholder="Search filename, route, type..." onChange={e=>setSearchGeneric(e.target.value)} />
-                        <input list="distList" style={styles.select} placeholder="Search District..." onChange={e=>setSearchDist(e.target.value)} />
-                        <datalist id="distList">{visibleDistricts.map(d=><option key={d} value={d} />)}</datalist>
-                        <input list="blkList" style={styles.select} placeholder="Search Block..." onChange={e=>setSearchBlock(e.target.value)} />
-                        <datalist id="blkList">{blockOptions.map(b=><option key={b} value={b} />)}</datalist>
-                        <input type="date" style={styles.select} onChange={e=>setSearchDateFrom(e.target.value)} />
-                        <span>to</span>
-                        <input type="date" style={styles.select} onChange={e=>setSearchDateTo(e.target.value)} />
+                        <input type="text" style={styles.searchInput} placeholder="Search..." onChange={e=>setSearchGeneric(e.target.value)} />
+                        <select style={styles.select} onChange={e=>setSearchDist(e.target.value)}><option value="">All Districts</option>{visibleDistricts.map(d=><option key={d}>{d}</option>)}</select>
+                        <select style={styles.select} onChange={e=>setSearchBlock(e.target.value)}><option value="">All Blocks</option>{blockOptions.map(b=><option key={b}>{b}</option>)}</select>
+                        <input type="date" style={styles.select} onChange={e=>setSearchDateFrom(e.target.value)} /><span>to</span><input type="date" style={styles.select} onChange={e=>setSearchDateTo(e.target.value)} />
                     </div>
-
                     <table style={styles.table}>
-                        <thead>
-                            <tr style={{textAlign:'left', background:'#f9f9f9'}}>
-                                <th style={styles.th}>Filename</th>
-                                <th style={styles.th}>Shot</th>
-                                <th style={styles.th}>Type</th>
-                                <th style={styles.th}>Media</th>
-                                <th style={styles.th}>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filteredSurveys.map(s => {
-                                const tooltip = `Route: ${s.routeName}\nDist: ${s.district}, Blk: ${s.block}\nLoc: ${s.startLocName} -> ${s.endLocName}\nGPS: ${s.latitude}, ${s.longitude}\nDate: ${s.timestamp}`;
-
-                                return (
-                                    <tr key={s.id} title={tooltip} style={{cursor:'help', borderBottom:'1px solid #f0f0f0', background: s.id % 2 === 0 ? '#fff' : '#fafafa'}}>
-                                        <td style={styles.td}><b>{s.generatedFileName}</b> <span style={{fontSize:'14px'}}>ℹ️</span></td>
-                                        <td style={styles.td}>{s.shotNumber}</td>
-                                        <td style={styles.td}>{s.locationType}</td>
-                                        <td style={styles.td}>
-                                            {s.videoId && <button style={{...styles.actionBtn, color:'green', borderColor:'green'}} onClick={() => handleViewMedia('video', s.videoId)}>Live Vid</button>}
-                                            
-                                            {s.goproId ? 
-                                                <button style={{...styles.actionBtn, color:'#333'}} onClick={() => handleViewMedia('video', s.goproId)}>GoPro</button> 
-                                                : 
-                                                <button style={{...styles.actionBtn, color:'blue', borderColor:'blue'}} onClick={()=>setUploadModalId(s.id)}>+ Upload</button>
-                                            }
-                                            
-                                            {s.photoId && <button style={{...styles.actionBtn, color:'green', borderColor:'green'}} onClick={() => handleViewMedia('img', s.photoId)}>Photo</button>}
-                                        </td>
-                                        <td style={styles.td}>
-                                            <button style={{...styles.actionBtn, background:'#eee', color:'#333'}} onClick={()=>{setEditingSurvey(s); setIsViewOnly(true); setShowSurveyTable(false); setShowSurveyForm(true)}}>View</button>
-                                            {(role === 'admin' || s.submittedBy === user) && <button style={{...styles.actionBtn, color:'blue', borderColor:'blue'}} onClick={()=>{setEditingSurvey(s); setIsViewOnly(false); setShowSurveyTable(false); setShowSurveyForm(true)}}>Edit</button>}
-                                            {role === 'admin' && <button style={{...styles.actionBtn, color:'red', borderColor:'red'}} onClick={()=>handleDeleteSurvey(s.id)}>Del</button>}
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
+                        <thead><tr style={{textAlign:'left', background:'#f9f9f9'}}><th style={styles.th}>Filename</th><th style={styles.th}>Shot</th><th style={styles.th}>Type</th><th style={styles.th}>Media</th><th style={styles.th}>Action</th></tr></thead>
+                        <tbody>{filteredSurveys.map(s => (<tr key={s.id} title={`Route: ${s.routeName}`} style={{cursor:'help', borderBottom:'1px solid #f0f0f0'}}><td style={styles.td}><b>{s.generatedFileName}</b> ℹ️</td><td style={styles.td}>{s.shotNumber}</td><td style={styles.td}>{s.locationType}</td><td style={styles.td}>{s.videoId && <button style={{...styles.actionBtn, color:'green', borderColor:'green'}} onClick={() => handleViewMedia('video', s.videoId)}>Live Vid</button>}{s.goproId ? <button style={{...styles.actionBtn, color:'#333'}} onClick={() => handleViewMedia('video', s.goproId)}>GoPro</button> : <button style={{...styles.actionBtn, color:'blue', borderColor:'blue'}} onClick={()=>setUploadModalId(s.id)}>+ Upload</button>}{s.photoId && <button style={{...styles.actionBtn, color:'green', borderColor:'green'}} onClick={() => handleViewMedia('img', s.photoId)}>Photo</button>}</td><td style={styles.td}><button style={{...styles.actionBtn, background:'#eee', color:'#333'}} onClick={()=>{setEditingSurvey(s); setIsViewOnly(true); setShowSurveyTable(false); setShowSurveyForm(true)}}>View</button>{(role === 'admin' || s.submittedBy === user) && <button style={{...styles.actionBtn, color:'blue', borderColor:'blue'}} onClick={()=>{setEditingSurvey(s); setIsViewOnly(false); setShowSurveyTable(false); setShowSurveyForm(true)}}>Edit</button>}{role === 'admin' && <button style={{...styles.actionBtn, color:'red', borderColor:'red'}} onClick={()=>handleDeleteSurvey(s.id)}>Del</button>}</td></tr>))}</tbody>
                     </table>
                 </ModalWrapper>
             )}
-
+            
             {showUserStatus && role === 'admin' && (
-                <ModalWrapper title="Admin Logs & User Status" onClose={() => setShowUserStatus(false)}>
-                    <div style={{display:'flex', gap:'20px', height:'100%'}}>
-                        <div style={{flex:1, borderRight:'1px solid #eee'}}>
-                            <h4 style={{margin:'0 0 10px 0', color:'#2e7d32'}}>Live User Status</h4>
-                            <table style={styles.table}>
-                                <thead><tr><th style={styles.th}>User</th><th style={styles.th}>Status</th><th style={styles.th}>Duration</th></tr></thead>
-                                <tbody>{userStatuses.map((u, i) => <tr key={i}><td style={styles.td}><b>{u.username}</b></td><td style={styles.td}><span style={{...styles.statusDot, background: u.status==='Online'?'green':'grey'}}></span>{u.status}</td><td style={styles.td}>{u.status==='Online' ? getSessionDuration(u.loginTime) : '-'}</td></tr>)}</tbody>
-                            </table>
-                        </div>
-                        <div style={{flex:2}}>
-                            <h4 style={{margin:'0 0 10px 0', color:'#1565c0'}}>System Logs</h4>
-                            <div style={{marginBottom:'10px', background:'#f5f5f5', padding:'10px', borderRadius:'4px'}}>From <input type="date" onChange={e => setFilterStart(e.target.value)}/> To <input type="date" onChange={e => setFilterEnd(e.target.value)}/></div>
-                            <div style={{maxHeight:'300px', overflowY:'auto'}}>
-                                <table style={styles.table}><thead><tr><th style={styles.th}>Time</th><th style={styles.th}>User</th><th style={styles.th}>Action</th><th style={styles.th}>Details</th></tr></thead><tbody>{getFilteredLogs().map((l,i) => <tr key={i}><td style={{padding:'8px', fontSize:'11px', color:'#666'}}>{l.displayTime}</td><td style={styles.td}><b>{l.username}</b></td><td style={styles.td}>{l.action}</td><td style={styles.td}><small>{l.details}</small></td></tr>)}</tbody></table>
-                            </div>
-                        </div>
+                <ModalWrapper title="Admin Logs" onClose={() => setShowUserStatus(false)}>
+                    <div style={{display:'flex', gap:'20px', flexDirection:'column'}}>
+                        <div style={{flex:1}}><h4>User Status</h4><table style={styles.table}><thead><tr><th>User</th><th>Status</th><th>Duration</th></tr></thead><tbody>{userStatuses.map((u, i) => <tr key={i}><td style={styles.td}><b>{u.username}</b></td><td style={styles.td}><span style={{...styles.statusDot, background: u.status==='Online'?'green':'grey'}}></span>{u.status}</td><td style={styles.td}>{u.status==='Online' ? getSessionDuration(u.loginTime) : '-'}</td></tr>)}</tbody></table></div>
+                        <div style={{flex:2}}><h4>Logs</h4><div style={{marginBottom:'10px'}}>From <input type="date" onChange={e => setFilterStart(e.target.value)}/> To <input type="date" onChange={e => setFilterEnd(e.target.value)}/></div><div style={{maxHeight:'300px', overflowY:'auto'}}><table style={styles.table}><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead><tbody>{getFilteredLogs().map((l,i) => <tr key={i}><td style={{padding:'5px', fontSize:'11px'}}>{l.displayTime}</td><td>{l.username}</td><td>{l.action}</td><td style={{fontSize:'11px'}}>{l.details}</td></tr>)}</tbody></table></div></div>
                     </div>
                 </ModalWrapper>
             )}
-
-            {uploadModalId && <ModalWrapper title="Upload GoPro Video" onClose={()=>setUploadModalId(null)}><div style={{padding:'40px', textAlign:'center', border:'2px dashed #ccc', borderRadius:'8px', margin:'20px'}}><p style={{marginBottom:'15px', color:'#666'}}>Select the GoPro video file for this survey record.</p><input type="file" accept="video/*" onChange={handleGoProUpload} /></div></ModalWrapper>}
-            {currentMedia && <ModalWrapper title="Media Viewer" onClose={() => setCurrentMedia(null)}><div style={{textAlign:'center', background:'black', padding:'10px', borderRadius:'4px'}}>{currentMedia.type === 'video' ? <video src={currentMedia.url} controls style={{width:'100%', maxHeight:'500px'}} /> : <img src={currentMedia.url} alt="Evd" style={{width:'100%', maxHeight:'500px'}} />}<div style={{marginTop:'15px'}}><a href={currentMedia.url} download={currentMedia.filename} style={styles.downloadBtn}>Download Media</a></div></div></ModalWrapper>}
-            {isPickingLocation && <div style={styles.pickingBanner} onClick={() => setIsPickingLocation(false)}>📍 PICKING MODE ACTIVE - Click map to select location (Click here to cancel)</div>}
+            
+            {uploadModalId && <ModalWrapper title="Upload GoPro" onClose={()=>setUploadModalId(null)}><div style={{padding:'20px'}}><input type="file" accept="video/*" onChange={handleGoProUpload} /></div></ModalWrapper>}
+            {currentMedia && <ModalWrapper title="Viewer" onClose={() => setCurrentMedia(null)}><div style={{textAlign:'center', background:'black', padding:'10px', borderRadius:'4px'}}>{currentMedia.type === 'video' ? <video src={currentMedia.url} controls style={{width:'100%', maxHeight:'500px'}} /> : <img src={currentMedia.url} alt="Evd" style={{width:'100%', maxHeight:'500px'}} />}<div style={{marginTop:'15px'}}><a href={currentMedia.url} download={currentMedia.filename} style={styles.downloadBtn}>Download</a></div></div></ModalWrapper>}
+            {isPickingLocation && <div style={styles.pickingBanner} onClick={() => setIsPickingLocation(false)}>📍 PICKING MODE ACTIVE - Click map</div>}
         </div>
     );
 };

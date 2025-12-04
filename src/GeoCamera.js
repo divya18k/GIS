@@ -836,7 +836,7 @@ L.Icon.Default.mergeOptions({
 const MiniMap = ({ lat, lon }) => {
     if (!lat || !lon) return <div style={{background:'rgba(0,0,0,0.5)', width:'100%', height:'100%', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'10px'}}>Locating...</div>;
     return (
-        <MapContainer center={[lat, lon]} zoom={18} zoomControl={false} dragging={false} scrollWheelZoom={false} attributionControl={false} style={{ width: "100%", height: "100%" }}>
+        <MapContainer center={[lat, lon]} zoom={16} zoomControl={false} dragging={false} scrollWheelZoom={false} attributionControl={false} style={{ width: "100%", height: "100%" }}>
             <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
             <Marker position={[lat, lon]} />
         </MapContainer>
@@ -869,33 +869,37 @@ export default function GeoCamera({ mode, onCapture, onClose, metaData }) {
     return () => { navigator.geolocation.clearWatch(watchId); clearInterval(timeInt); };
   }, []);
 
-  // 2. Camera Start
+  // 2. Start Camera (Mobile Safe)
   useEffect(() => {
-    let currentStream = null;
-    const currentVideoRef = videoRef.current; // Capture ref value
-
     async function start() {
       try {
-        const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: mode === 'video' });
-        currentStream = s;
+        // SAFE CONSTRAINTS FOR MOBILE
+        const constraints = { 
+            video: { facingMode: "environment" }, // "environment" prefers rear camera but won't crash if unavailable
+            audio: mode === 'video' 
+        };
+        
+        const s = await navigator.mediaDevices.getUserMedia(constraints);
         setStream(s);
-        if (currentVideoRef) {
-            currentVideoRef.srcObject = s;
-            currentVideoRef.play().catch(e => console.log(e));
+        if (videoRef.current) {
+            videoRef.current.srcObject = s;
+            videoRef.current.play().catch(e => console.error("Play Error:", e));
         }
-      } catch (err) { alert("Camera Error: " + err.message); onClose(); }
+      } catch (err) {
+        alert("Camera Error: " + err.message + "\nCheck permissions or use HTTPS.");
+        onClose();
+      }
     }
     start();
-    
     return () => {
-        if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+        if (stream) stream.getTracks().forEach(t => t.stop());
         if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
         if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
     // eslint-disable-next-line
   }, []);
 
-  // 3. Photo Capture
+  // 3. Capture Photo
   const handleCapturePhoto = async () => {
     if (captureRef.current) {
       try {
@@ -919,25 +923,27 @@ export default function GeoCamera({ mode, onCapture, onClose, metaData }) {
 
     ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
 
-    // Overlay
-    ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
-    ctx.fillRect(0, 0, canvas.width, 140); 
+    // Overlay Background
+    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+    ctx.fillRect(0, 0, canvas.width, 100); 
 
     ctx.shadowColor = "black"; ctx.shadowBlur = 4;
     
+    // Left Data (Yellow)
     ctx.textAlign = "left";
     ctx.fillStyle = "#FFD700"; 
-    ctx.font = "bold 24px Arial";
-    ctx.fillText(`Dist: ${metaData?.district || 'N/A'}`, 20, 40);
-    ctx.fillText(`Block: ${metaData?.block || 'N/A'}`, 20, 80);
-    ctx.fillText(`Route: ${metaData?.route || 'N/A'}`, 20, 120);
+    ctx.font = "bold 20px Arial";
+    ctx.fillText(`Dist: ${metaData?.district || 'N/A'}`, 20, 30);
+    ctx.fillText(`Block: ${metaData?.block || 'N/A'}`, 20, 55);
+    ctx.fillText(`Route: ${metaData?.route || 'N/A'}`, 20, 80);
 
+    // Right Data (White)
     ctx.textAlign = "right";
     ctx.fillStyle = "white";
-    ctx.font = "18px Arial";
-    ctx.fillText(`${new Date().toLocaleString()}`, canvas.width - 20, 40);
-    ctx.fillText(`Lat: ${coords.lat.toFixed(6)}`, canvas.width - 20, 80);
-    ctx.fillText(`Lon: ${coords.lon.toFixed(6)}`, canvas.width - 20, 120);
+    ctx.font = "16px Arial";
+    ctx.fillText(`${new Date().toLocaleString()}`, canvas.width - 20, 30);
+    ctx.fillText(`Lat: ${coords.lat.toFixed(6)}`, canvas.width - 20, 55);
+    ctx.fillText(`Lon: ${coords.lon.toFixed(6)}`, canvas.width - 20, 80);
 
     animationRef.current = requestAnimationFrame(drawToCanvas);
   };
@@ -947,9 +953,9 @@ export default function GeoCamera({ mode, onCapture, onClose, metaData }) {
     drawToCanvas();
     
     const canvasStream = canvasRef.current.captureStream(30); 
-    stream.getAudioTracks().forEach(track => canvasStream.addTrack(track));
+    if(stream.getAudioTracks().length > 0) canvasStream.addTrack(stream.getAudioTracks()[0]);
 
-    const rec = new MediaRecorder(canvasStream, { mimeType: 'video/webm;codecs=vp8' });
+    const rec = new MediaRecorder(canvasStream, { mimeType: 'video/webm' });
     chunksRef.current = [];
     
     rec.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
@@ -986,25 +992,40 @@ export default function GeoCamera({ mode, onCapture, onClose, metaData }) {
       <div ref={captureRef} style={{ position: "relative", width: "100%", height: "100%", overflow:"hidden" }}>
         <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />
 
-        <div style={{ position: "absolute", top: 20, left: 20, zIndex: 10, textAlign: 'left' }}>
-            <div style={styles.yellowText}>Dist: <span style={{color:'white'}}>{metaData?.district || 'N/A'}</span></div>
-            <div style={styles.yellowText}>Block: <span style={{color:'white'}}>{metaData?.block || 'N/A'}</span></div>
-            <div style={styles.yellowText}>Route: <span style={{color:'white'}}>{metaData?.route || 'N/A'}</span></div>
+        {/* HEADER INFO */}
+        <div style={{ position: "absolute", top: 0, left: 0, width: '100%', padding: '15px', background: 'linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)', color: 'white', display:'flex', justifyContent:'space-between', zIndex: 10 }}>
+            <div>
+                <div style={styles.yellowText}>Dist: {metaData?.district}</div>
+                <div style={styles.yellowText}>Block: {metaData?.block}</div>
+                <div style={styles.yellowText}>Route: {metaData?.route}</div>
+            </div>
+            <div style={{textAlign:'right'}}>
+                <div style={styles.whiteText}>{dateTime}</div>
+                <div style={styles.whiteText}>Lat: {coords.lat.toFixed(5)}</div>
+                <div style={styles.whiteText}>Lon: {coords.lon.toFixed(5)}</div>
+            </div>
         </div>
 
-        <div style={{ position: "absolute", top: 20, right: 20, zIndex: 10, textAlign: 'right' }}>
-            <div style={styles.whiteText}>Lat: {coords.lat.toFixed(6)}</div>
-            <div style={styles.whiteText}>Lon: {coords.lon.toFixed(6)}</div>
-            <div style={styles.whiteText}>{dateTime}</div>
-        </div>
-
-        <div style={{ position: "absolute", bottom: 100, left: 10, width: "120px", height: "120px", border: "2px solid white", borderRadius: "4px", overflow: 'hidden', zIndex: 10 }}>
+        {/* BOTTOM LEFT MAP OVERLAY */}
+        <div style={{ 
+            position: "absolute", 
+            bottom: '120px', 
+            left: '20px', 
+            width: "100px", 
+            height: "100px", 
+            border: "2px solid white", 
+            borderRadius: "4px", 
+            overflow: 'hidden', 
+            zIndex: 10,
+            boxShadow: "0 0 10px rgba(0,0,0,0.5)"
+        }}>
             <MiniMap lat={coords.lat} lon={coords.lon} />
             <div style={{position:'absolute', top:'50%', left:'50%', transform:'translate(-50%, -50%)', color:'#2196f3', fontSize:'24px', textShadow:'0 0 3px white'}}>📍</div>
         </div>
       </div>
 
-      <button onClick={onClose} style={{ position: "absolute", top: 20, right: 20, background: "rgba(0,0,0,0.5)", color: "white", border: "none", borderRadius: "50%", width: "40px", height: "40px", fontSize: "20px", cursor: "pointer", zIndex: 20 }}>✖</button>
+      {/* CONTROLS */}
+      <button onClick={onClose} style={{ position: "absolute", top: 20, right: 20, background: "none", color: "white", border: "none", fontSize: "30px", cursor: "pointer", zIndex: 20 }}>✖</button>
 
       <div style={{ position: "absolute", bottom: 30, width: "100%", display: "flex", justifyContent: "center", zIndex: 20 }}>
         {mode === 'photo' ? (
