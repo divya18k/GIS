@@ -3146,14 +3146,13 @@ const SurveyForm = ({ onClose, onPickLocation, pickedCoords, districts, blocks, 
     const [showGeoCamera, setShowGeoCamera] = useState(false);
     const [cameraMode, setCameraMode] = useState(null);
 
-    // --- FIX: AUTO-FILL DATE WHEN MAP IS PICKED ---
     useEffect(() => {
         if (pickedCoords && !viewOnly) {
             setFormData(prev => ({ 
                 ...prev, 
                 latitude: pickedCoords.lat.toFixed(6), 
                 longitude: pickedCoords.lng.toFixed(6),
-                dateTime: new Date().toLocaleString() // <--- ADDED THIS
+                dateTime: new Date().toLocaleString() 
             }));
         }
     }, [pickedCoords, viewOnly]);
