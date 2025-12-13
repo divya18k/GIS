@@ -559,9 +559,6 @@ import { db } from '../config/db.js';
 import fs from 'fs';
 import path from 'path';
 
-// Note: Synology service is imported but NOT USED to prevent crashes
-// import { uploadToSynology } from '../services/synologyService.js'; 
-
 const TYPE_CODES = {
     "HDD Start Point": "HSP", "HDD End Point": "HEP", "Chamber Location": "CHM",
     "GP Location": "GPL", "Blowing Start Point": "BSP", "Blowing End Point": "BEP",
@@ -586,23 +583,23 @@ export const createSurvey = async (req, res) => {
             submittedBy, dateTime 
         } = req.body;
 
-        const typeCode = TYPE_CODES[locationType] || 'OTH';
-        const baseFilename = generateFilenameBase(district, block, typeCode, shotNumber);
+        const baseFilename = generateFilenameBase(district, block, TYPE_CODES[locationType] || 'OTH', shotNumber);
         
-        // --- BYPASS LOGIC: We fake the file paths ---
-        // This ensures the database saves the data without crashing on network upload
-        const photoPaths = ["PENDING_UPLOAD.jpg"];
+        // --- BYPASS MODE ---
+        // We are NOT connecting to Synology. We are just saving text.
+        // This guarantees the code will not crash due to network issues.
+        const photoPaths = ["NAS_DISABLED_FOR_TESTING.jpg"];
         const videoPaths = [];
-        let selfiePath = "PENDING_SELFIE.jpg";
+        let selfiePath = "NAS_DISABLED.jpg";
 
-        // If files exist locally, just delete them to save space
+        // Clean up temp files from Render server so it doesn't get full
         if (req.files) {
             Object.values(req.files).flat().forEach(file => {
                 if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
             });
         }
 
-        console.log("💾 Saving to Database...");
+        console.log("💾 Saving data to Database...");
 
         const query = `
             INSERT INTO surveys (
@@ -626,11 +623,11 @@ export const createSurvey = async (req, res) => {
         ];
 
         const result = await db.query(query, values);
-        console.log("✅ DB Insert Success. ID:", result.rows[0].id);
+        console.log("✅ Success! Survey ID:", result.rows[0].id);
         res.json({ success: true, survey: result.rows[0] });
 
     } catch (error) {
-        console.error("❌ Create Survey Error:", error);
+        console.error("❌ Database Error:", error);
         res.status(500).json({ error: "DB Error: " + error.message });
     }
 };
