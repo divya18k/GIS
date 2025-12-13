@@ -1,16 +1,54 @@
+// // import express from 'express';
+// // import cors from 'cors';
+// // import dotenv from 'dotenv';
+// // import path from 'path';
+// // import surveyRoutes from './routes/surveyRoutes.js';
+// // import userRoutes from './routes/userRoutes.js';
+
+// // dotenv.config();
+
+// // const app = express();
+// // const PORT = process.env.PORT || 4000;
+
+// // app.use(cors());
+// // app.use(express.json());
+// // app.use(express.urlencoded({ extended: true }));
+
+// // const UPLOAD_BASE = process.env.UPLOAD_PATH || path.resolve(process.cwd(), 'uploads');
+// // app.use('/uploads', express.static(UPLOAD_BASE));
+
+// // app.use('/surveys', surveyRoutes);
+
+
+// // app.use('/users', userRoutes);
+
+
+// // app.get('/', (req, res) => res.json({ ok: true }));
+
+// // app.listen(PORT, () => {
+// //   console.log(`Server listening on port ${PORT}`);
+// // });
+
+
 // import express from 'express';
 // import cors from 'cors';
 // import dotenv from 'dotenv';
 // import path from 'path';
 // import surveyRoutes from './routes/surveyRoutes.js';
 // import userRoutes from './routes/userRoutes.js';
+// import { pool } from './config/db.js'; // Import the database connection
 
 // dotenv.config();
 
 // const app = express();
 // const PORT = process.env.PORT || 4000;
 
-// app.use(cors());
+// // --- CORS Configuration (Allows your Render Frontend) ---
+// app.use(cors({
+//     origin: ["http://localhost:3000", "https://gis-kpj2.onrender.com"],
+//     credentials: true
+// }));
+
 // app.use(express.json());
 // app.use(express.urlencoded({ extended: true }));
 
@@ -18,15 +56,46 @@
 // app.use('/uploads', express.static(UPLOAD_BASE));
 
 // app.use('/surveys', surveyRoutes);
-
-
 // app.use('/users', userRoutes);
 
+// app.get('/', (req, res) => res.json({ ok: true, message: "Backend is running!" }));
 
-// app.get('/', (req, res) => res.json({ ok: true }));
+// // --- AUTOMATIC DATABASE SETUP ---
+// const initDB = async () => {
+//     try {
+//         console.log("🛠️ Checking database tables...");
+        
+//         // 1. Create Users Table
+//         await pool.query(`
+//             CREATE TABLE IF NOT EXISTS users (
+//                 id SERIAL PRIMARY KEY,
+//                 username VARCHAR(255) UNIQUE NOT NULL,
+//                 password VARCHAR(255) NOT NULL,
+//                 role VARCHAR(50) DEFAULT 'user'
+//             );
+//         `);
 
-// app.listen(PORT, () => {
-//   console.log(`Server listening on port ${PORT}`);
+//         // 2. Create Surveys Table
+//         await pool.query(`
+//             CREATE TABLE IF NOT EXISTS surveys (
+//                 id SERIAL PRIMARY KEY,
+//                 submitted_by VARCHAR(255),
+//                 generated_filename TEXT,
+//                 data JSONB, 
+//                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+//             );
+//         `);
+//         console.log("✅ Database tables are ready!");
+//     } catch (err) {
+//         console.error("❌ Database setup failed:", err.message);
+//     }
+// };
+
+// // Initialize DB then Start Server
+// initDB().then(() => {
+//     app.listen(PORT, () => {
+//         console.log(`🚀 Server listening on port ${PORT}`);
+//     });
 // });
 
 
@@ -36,14 +105,14 @@ import dotenv from 'dotenv';
 import path from 'path';
 import surveyRoutes from './routes/surveyRoutes.js';
 import userRoutes from './routes/userRoutes.js';
-import { pool } from './config/db.js'; // Import the database connection
+import { pool } from './config/db.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// --- CORS Configuration (Allows your Render Frontend) ---
+// --- CORS: Allow Render Frontend & Localhost ---
 app.use(cors({
     origin: ["http://localhost:3000", "https://gis-kpj2.onrender.com"],
     credentials: true
@@ -58,13 +127,13 @@ app.use('/uploads', express.static(UPLOAD_BASE));
 app.use('/surveys', surveyRoutes);
 app.use('/users', userRoutes);
 
-app.get('/', (req, res) => res.json({ ok: true, message: "Backend is running!" }));
+app.get('/', (req, res) => res.json({ ok: true, message: "GIS Backend is Live!" }));
 
-// --- AUTOMATIC DATABASE SETUP ---
+// --- AUTOMATIC DATABASE SETUP (Fixed Schema) ---
 const initDB = async () => {
     try {
         console.log("🛠️ Checking database tables...");
-        
+
         // 1. Create Users Table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
@@ -75,14 +144,31 @@ const initDB = async () => {
             );
         `);
 
-        // 2. Create Surveys Table
+        // 2. Create Surveys Table (MATCHING YOUR CONTROLLER EXACTLY)
         await pool.query(`
             CREATE TABLE IF NOT EXISTS surveys (
                 id SERIAL PRIMARY KEY,
-                submitted_by VARCHAR(255),
+                district VARCHAR(255),
+                block VARCHAR(255),
+                route_name VARCHAR(255),
+                location_type VARCHAR(255),
+                shot_number VARCHAR(100),
+                ring_number VARCHAR(100),
+                start_location VARCHAR(255),
+                end_location VARCHAR(255),
+                latitude DECIMAL,
+                longitude DECIMAL,
+                surveyor_name VARCHAR(255),
+                surveyor_mobile VARCHAR(50),
                 generated_filename TEXT,
-                data JSONB, 
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                submitted_by VARCHAR(255),
+                survey_date TIMESTAMP,
+                photos JSONB,
+                videos JSONB,
+                selfie_path TEXT,
+                remarks TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
         console.log("✅ Database tables are ready!");
@@ -91,7 +177,7 @@ const initDB = async () => {
     }
 };
 
-// Initialize DB then Start Server
+// Start Server
 initDB().then(() => {
     app.listen(PORT, () => {
         console.log(`🚀 Server listening on port ${PORT}`);
