@@ -1,0 +1,228 @@
+import axios from 'axios';
+import FormData from 'form-data';
+import fs from 'fs';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const SYNO_HOST = process.env.SYNO_HOST; 
+const SYNO_USER = process.env.SYNO_USER;
+const SYNO_PASS = process.env.SYNO_PASS;
+const SYNO_ROOT_PATH = '/IT_Development/GIS'; 
+
+let currentSid = null;
+
+// --- 1. LOGIN ---
+const loginToSynology = async () => {
+    try {
+        console.log("🔌 Connecting to Synology...");
+        const url = `${SYNO_HOST}/webapi/auth.cgi?api=SYNO.API.Auth&version=3&method=login&account=${SYNO_USER}&passwd=${SYNO_PASS}&session=FileStation&format=sid`;
+        const res = await axios.get(url);
+        
+        if (res.data.success) {
+            currentSid = res.data.data.sid;
+            console.log(" Synology Login Success. SID:", currentSid);
+            return currentSid;
+        } else {
+            console.error(" Synology Login Failed. Response:", JSON.stringify(res.data));
+            return null;
+        }
+    } catch (error) {
+        console.error(" Synology Network Error:", error.message);
+        return null;
+    }
+};
+
+// --- 2. UPLOAD ---
+// export const uploadToSynology = async (localFilePath, metadata, finalFilename) => {
+//     // Check if file exists locally first
+//     if (!fs.existsSync(localFilePath)) {
+//         console.error("❌ Local file missing:", localFilePath);
+//         return null;
+//     }
+
+//     if (!currentSid) await loginToSynology();
+//     if (!currentSid) {
+//         console.error("❌ Cannot upload: No active session.");
+//         return null;
+//     }
+
+//     // A. Generate Folder Structure
+//     const TYPE_CODES = {
+//         "HDD Start Point": "HSP", "HDD End Point": "HEP", "Chamber Location": "CHM",
+//         "GP Location": "GPL", "Blowing Start Point": "BSP", "Blowing End Point": "BEP",
+//         "Coupler location": "CPL", "splicing": "SPL", "Other": "OTH"
+//     };
+
+//     const district = (metadata.district || 'UNK').substring(0, 3).toUpperCase();
+//     const block = (metadata.block || 'UNK').substring(0, 3).toUpperCase();
+//     const typeCode = TYPE_CODES[metadata.locationType] || 'OTH';
+//     const shot = String(metadata.shotNumber || '1');
+
+//     // Date Logic
+//     let d = new Date();
+//     if (metadata.dateTime && !isNaN(new Date(metadata.dateTime).getTime())) {
+//         d = new Date(metadata.dateTime);
+//     }
+//     const day = String(d.getDate()).padStart(2, '0');
+//     const month = String(d.getMonth() + 1).padStart(2, '0');
+//     const year = String(d.getFullYear());
+//     const dateStr = `${day}-${month}-${year}`;
+
+//     const destFolderPath = `${SYNO_ROOT_PATH}/${district}/${block}/${typeCode}/${shot}/${dateStr}`;
+
+//     console.log(`📂 Target Folder: ${destFolderPath}`);
+//     console.log(`📄 Uploading File as: ${finalFilename}`);
+
+//     // B. Prepare Form Data
+//     const form = new FormData();
+//     form.append('api', 'SYNO.FileStation.Upload');
+//     form.append('version', '2');
+//     form.append('method', 'upload');
+//     form.append('path', destFolderPath);
+//     form.append('create_parents', 'true'); 
+//     form.append('overwrite', 'true');
+    
+//     // 1. Explicit Synology Filename Param
+//     form.append('filename', finalFilename);
+    
+//     // 2. CRITICAL FIX: Force the filename on the stream option
+//     // This overrides the random Multer hash name (e.g. ef4c...)
+//     form.append('file', fs.createReadStream(localFilePath), { filename: finalFilename });
+
+//     try {
+//         const url = `${SYNO_HOST}/webapi/entry.cgi?_sid=${currentSid}`;
+        
+//         const response = await axios.post(url, form, {
+//             headers: form.getHeaders(),
+//             maxContentLength: Infinity,
+//             maxBodyLength: Infinity
+//         });
+
+//         if (response.data.success) {
+//             console.log(`✅ Upload Complete: ${finalFilename}`);
+//             return `${destFolderPath}/${finalFilename}`; 
+//         } else {
+//             console.error("❌ Upload Failed API Response:", JSON.stringify(response.data));
+            
+//             // Retry on session expire
+//             if (response.data.error && response.data.error.code === 105) {
+//                 console.log("🔄 Session expired. Retrying login...");
+//                 currentSid = null;
+//                 return uploadToSynology(localFilePath, metadata, finalFilename);
+//             }
+//             return null;
+//         }
+//     } catch (error) {
+//         console.error("❌ Axios Upload Exception:", error.message);
+//         return null;
+//     }
+// };
+
+// --- 3. DOWNLOAD ---
+export const uploadToSynology = async (localFilePath, metadata, finalFilename) => {
+    // Check if file exists locally first
+    if (!fs.existsSync(localFilePath)) {
+        console.error("Local file missing:", localFilePath);
+        return null;
+    }
+
+    if (!currentSid) await loginToSynology();
+    if (!currentSid) {
+        console.error(" Cannot upload: No active session.");
+        return null;
+    }
+
+    // A. Generate Folder Structure
+    const TYPE_CODES = {
+        "HDD Start Point": "HSP", "HDD End Point": "HEP", "Chamber Location": "CHM",
+        "GP Location": "GPL", "Blowing Start Point": "BSP", "Blowing End Point": "BEP",
+        "Coupler location": "CPL", "splicing": "SPL", "Other": "OTH"
+    };
+
+    // --- CHANGED HERE: Use Full Names (Removed .substring) ---
+    const district = metadata.district || 'UNK';
+    const block = metadata.block || 'UNK';
+    
+    // Type Code stays short (Standard practice), or remove lookup to make full
+    const typeCode = TYPE_CODES[metadata.locationType] || 'OTH';
+    const shot = String(metadata.shotNumber || '1');
+
+    // Date Logic
+    let d = new Date();
+    if (metadata.dateTime && !isNaN(new Date(metadata.dateTime).getTime())) {
+        d = new Date(metadata.dateTime);
+    }
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = String(d.getFullYear());
+    const dateStr = `${day}-${month}-${year}`;
+
+    // Path Example: /IT_Development/GIS/Hyderabad/Central/HSP/1/13-12-2025
+    const destFolderPath = `${SYNO_ROOT_PATH}/${district}/${block}/${typeCode}/${shot}/${dateStr}`;
+
+    console.log(` Target Folder: ${destFolderPath}`);
+    console.log(`Uploading File as: ${finalFilename}`);
+
+    // B. Prepare Form Data
+    const form = new FormData();
+    form.append('api', 'SYNO.FileStation.Upload');
+    form.append('version', '2');
+    form.append('method', 'upload');
+    form.append('path', destFolderPath);
+    form.append('create_parents', 'true'); 
+    form.append('overwrite', 'true');
+    
+    // 1. Explicit Synology Filename Param
+    form.append('filename', finalFilename);
+    
+    // 2. CRITICAL FIX: Force the filename on the stream option
+    form.append('file', fs.createReadStream(localFilePath), { filename: finalFilename });
+
+    try {
+        const url = `${SYNO_HOST}/webapi/entry.cgi?_sid=${currentSid}`;
+        
+        const response = await axios.post(url, form, {
+            headers: form.getHeaders(),
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
+        });
+
+        if (response.data.success) {
+            console.log(` Upload Complete: ${finalFilename}`);
+            return `${destFolderPath}/${finalFilename}`; 
+        } else {
+            console.error(" Upload Failed API Response:", JSON.stringify(response.data));
+            
+            // Retry on session expire
+            if (response.data.error && response.data.error.code === 105) {
+                console.log(" Session expired. Retrying login...");
+                currentSid = null;
+                return uploadToSynology(localFilePath, metadata, finalFilename);
+            }
+            return null;
+        }
+    } catch (error) {
+        console.error(" Axios Upload Exception:", error.message);
+        return null;
+    }
+};
+export const downloadFromSynology = async (synoPath, res) => {
+    if (!currentSid) await loginToSynology();
+    if (!currentSid) return res.status(500).send("Storage Error");
+
+    try {
+        const url = `${SYNO_HOST}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&path=${encodeURIComponent(synoPath)}&mode=open&_sid=${currentSid}`;
+        
+        const response = await axios({
+            method: 'GET',
+            url: url,
+            responseType: 'stream'
+        });
+
+        response.data.pipe(res);
+    } catch (error) {
+        console.error(" Download Error:", error.message);
+        if (!res.headersSent) res.status(404).send("File not found");
+    }
+};

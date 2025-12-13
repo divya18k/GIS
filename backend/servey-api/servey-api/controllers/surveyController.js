@@ -1,0 +1,231 @@
+import { db } from '../config/db.js';
+import fs from 'fs';
+import path from 'path';
+import { uploadToSynology, downloadFromSynology } from '../services/synologyService.js';
+
+const TYPE_CODES = {
+    "HDD Start Point": "HSP", "HDD End Point": "HEP", "Chamber Location": "CHM",
+    "GP Location": "GPL", "Blowing Start Point": "BSP", "Blowing End Point": "BEP",
+    "Coupler location": "CPL", "splicing": "SPL", "Other": "OTH"
+};
+
+const generateFilenameBase = (district, block, typeCode, shotNo) => {
+    // const d = (district || 'UNK').substring(0, 3).toUpperCase();
+    // const b = (block || 'UNK').substring(0, 3).toUpperCase();
+    const d = (district || 'UNK');
+    const b = (block || 'UNK');
+    const s = String(shotNo || '1').padStart(2, '0'); 
+    return `${d}_${b}_${typeCode}_SHOT${s}`;
+};
+
+export const createSurvey = async (req, res) => {
+    try {
+        console.log("📥 Received Survey Submission...");
+        console.log("Files received:", req.files ? Object.keys(req.files) : "NONE");
+
+        const { 
+            district, block, routeName, locationType, 
+            shotNumber, ringNumber, startLocName, endLocName, 
+            latitude, longitude, surveyorName, surveyorMobile, remarks,
+            submittedBy, dateTime 
+        } = req.body;
+
+        const typeCode = TYPE_CODES[locationType] || 'OTH';
+        const baseFilename = generateFilenameBase(district, block, typeCode, shotNumber);
+        const metadata = { district, block, locationType, shotNumber, dateTime };
+
+        const photoPaths = [];
+        const videoPaths = [];
+        let selfiePath = null;
+
+        const processFile = async (file, suffix, index = '') => {
+            if (!file) return null;
+
+            let ext = path.extname(file.originalname);
+            if (!ext || ext === '.blob') {
+                ext = file.mimetype.includes('image') ? '.jpg' : '.mp4';
+            }
+
+            const finalName = `${baseFilename}_${suffix}${index}${ext}`;
+            const nasPath = await uploadToSynology(file.path, metadata, finalName);
+            
+            // Cleanup
+            if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+            
+            return nasPath;
+        };
+
+        // Process Files
+        if (req.files['photos']) {
+            for (let i = 0; i < req.files['photos'].length; i++) {
+                const path = await processFile(req.files['photos'][i], 'photo', i > 0 ? `_${i}` : '');
+                if (path) photoPaths.push(path);
+            }
+        }
+
+        if (req.files['videos']) {
+            for (let i = 0; i < req.files['videos'].length; i++) {
+                const tag = i === 0 ? 'video' : 'gopro';
+                const path = await processFile(req.files['videos'][i], tag);
+                if (path) videoPaths.push(path);
+            }
+        }
+
+        if (req.files['selfie']) {
+            selfiePath = await processFile(req.files['selfie'][0], 'selfie');
+        }
+
+        // --- CHECK IF UPLOAD FAILED ---
+        // If files were sent but paths are empty, upload failed.
+        if (req.files['photos'] && photoPaths.length === 0) {
+            console.error("⚠️ Photos were sent but Synology upload returned NULL");
+        }
+
+        const query = `
+            INSERT INTO surveys (
+                district, block, route_name, location_type, 
+                shot_number, ring_number, start_location, end_location, 
+                latitude, longitude, surveyor_name, surveyor_mobile, 
+                generated_filename, submitted_by, survey_date,
+                photos, videos, selfie_path, remarks
+            ) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) 
+            RETURNING *`;
+
+        const values = [
+            district, block, routeName, locationType, 
+            shotNumber, ringNumber, startLocName, endLocName, 
+            parseFloat(latitude || 0), parseFloat(longitude || 0), 
+            surveyorName, surveyorMobile, baseFilename, submittedBy, dateTime,
+            JSON.stringify(photoPaths),
+            JSON.stringify(videoPaths), 
+            selfiePath, remarks
+        ];
+
+        const result = await db.query(query, values);
+        console.log("✅ DB Insert Success. ID:", result.rows[0].id);
+        res.json({ success: true, survey: result.rows[0] });
+
+    } catch (error) {
+        console.error("❌ Create Survey Error:", error);
+        res.status(500).json({ error: error.message });
+    }
+};
+
+export const getSurveys = async (req, res) => {
+    try {
+        const result = await db.query("SELECT * FROM surveys ORDER BY created_at DESC");
+        const surveys = result.rows.map(s => {
+            const mediaFiles = [];
+            if (s.photos && Array.isArray(s.photos)) s.photos.forEach(p => mediaFiles.push({ type: 'photo', url: p }));
+            else if (typeof s.photos === 'string') try { JSON.parse(s.photos).forEach(p => mediaFiles.push({ type: 'photo', url: p })); } catch(e){}
+            
+            if (s.videos && Array.isArray(s.videos)) s.videos.forEach(v => { const type = v.includes('gopro') ? 'gopro' : 'video'; mediaFiles.push({ type, url: v }); });
+            else if (typeof s.videos === 'string') try { JSON.parse(s.videos).forEach(v => { const type = v.includes('gopro') ? 'gopro' : 'video'; mediaFiles.push({ type, url: v }); }); } catch(e){}
+
+            if (s.selfie_path) mediaFiles.push({ type: 'selfie', url: s.selfie_path });
+
+            return { ...s, shotNumber: s.shot_number, ringNumber: s.ring_number, startLocName: s.start_location, endLocName: s.end_location, routeName: s.route_name, locationType: s.location_type, mediaFiles };
+        });
+        res.json({ surveys });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+export const cancelSurvey = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await db.query("DELETE FROM surveys WHERE id = $1", [id]);
+        res.json({ success: true, message: "Survey deleted" });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+};
+
+// export const updateSurveyDetails = async (req, res) => {
+//     try {
+//         const { id } = req.params;
+//         const { district, block, routeName, remarks, surveyorName, shotNumber, ringNumber } = req.body;
+//         await db.query("UPDATE surveys SET district=$1, block=$2, route_name=$3, remarks=$4, surveyor_name=$5, shot_number=$6, ring_number=$7 WHERE id=$8", [district, block, routeName, remarks, surveyorName, shotNumber, ringNumber, id]);
+//         res.json({ success: true });
+//     } catch (err) { res.status(500).json({ error: err.message }); }
+// };
+
+export const updateSurveyDetails = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // 1. Destructure using the EXACT names sent by Dashboard.js (CamelCase)
+        const { 
+            district, 
+            block, 
+            routeName, 
+            locationType, 
+            shotNumber, 
+            ringNumber, 
+            startLocName, // Frontend sends 'startLocName'
+            endLocName,   // Frontend sends 'endLocName'
+            latitude, 
+            longitude, 
+            surveyorName, 
+            surveyorMobile, 
+            remarks,
+            fileNamePrefix // Frontend sends 'fileNamePrefix'
+        } = req.body;
+
+        console.log(`🔄 Updating Survey ID: ${id}`);
+        console.log(`Data received: Route=${routeName}, Lat=${latitude}, Lng=${longitude}`);
+
+        // 2. Map these variables to the Database Columns (snake_case)
+        const query = `
+            UPDATE surveys 
+            SET 
+                district = $1,
+                block = $2,
+                route_name = $3,
+                location_type = $4,
+                shot_number = $5,
+                ring_number = $6,
+                start_location = $7, 
+                end_location = $8,
+                latitude = $9,
+                longitude = $10,
+                surveyor_name = $11,
+                surveyor_mobile = $12,
+                generated_filename = $13,
+                remarks = $14,
+                updated_at = NOW()
+            WHERE id = $15
+        `;
+
+        // 3. Prepare values array (handling potential nulls)
+        const values = [
+            district, 
+            block, 
+            routeName, 
+            locationType, 
+            shotNumber, 
+            ringNumber, 
+            startLocName, // Maps to start_location ($7)
+            endLocName,   // Maps to end_location ($8)
+            parseFloat(latitude || 0), 
+            parseFloat(longitude || 0), 
+            surveyorName, 
+            surveyorMobile, 
+            fileNamePrefix, // Maps to generated_filename ($13)
+            remarks,
+            id
+        ];
+
+        await db.query(query, values);
+        
+        console.log("Update Query Executed Successfully");
+        res.json({ success: true });
+
+    } catch (err) { 
+        console.error(" Update Error:", err);
+        res.status(500).json({ error: err.message }); 
+    }
+};
+export const readFile = async (req, res) => {
+    const filePath = req.query.path;
+    if (!filePath) return res.status(400).send('No path provided');
+    await downloadFromSynology(filePath, res);
+};
