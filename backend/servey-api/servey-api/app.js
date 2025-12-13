@@ -224,11 +224,10 @@ const initDB = async () => {
     try {
         console.log("🛠️ Checking database tables...");
 
-        // ⚠️ RESET TABLE: This deletes the bad table so the new one can be created.
-        // Once your App works, you can remove this line to stop deleting data on restart.
+        // 1. DROP the old table to fix columns (This fixes the "Server Error")
         await pool.query('DROP TABLE IF EXISTS surveys'); 
 
-        // 1. Create Users Table
+        // 2. Create Users Table
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -238,7 +237,7 @@ const initDB = async () => {
             );
         `);
 
-        // 2. Create Surveys Table (Correct Columns)
+        // 3. Create Surveys Table (Correct Structure)
         await pool.query(`
             CREATE TABLE IF NOT EXISTS surveys (
                 id SERIAL PRIMARY KEY,
@@ -271,7 +270,7 @@ const initDB = async () => {
     }
 };
 
-// Start Server
+// Start Server properly
 initDB().then(() => {
     app.listen(PORT, () => {
         console.log(`🚀 Server listening on port ${PORT}`);

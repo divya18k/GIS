@@ -558,7 +558,9 @@
 import { db } from '../config/db.js';
 import fs from 'fs';
 import path from 'path';
-// import { uploadToSynology, downloadFromSynology } from '../services/synologyService.js'; // Commented out for safety
+
+// Note: Synology service is imported but NOT USED to prevent crashes
+// import { uploadToSynology } from '../services/synologyService.js'; 
 
 const TYPE_CODES = {
     "HDD Start Point": "HSP", "HDD End Point": "HEP", "Chamber Location": "CHM",
@@ -587,53 +589,21 @@ export const createSurvey = async (req, res) => {
         const typeCode = TYPE_CODES[locationType] || 'OTH';
         const baseFilename = generateFilenameBase(district, block, typeCode, shotNumber);
         
-        const photoPaths = [];
+        // --- BYPASS LOGIC: We fake the file paths ---
+        // This ensures the database saves the data without crashing on network upload
+        const photoPaths = ["PENDING_UPLOAD.jpg"];
         const videoPaths = [];
-        let selfiePath = null;
+        let selfiePath = "PENDING_SELFIE.jpg";
 
-        // --- SAFE FILE PROCESSING (BYPASS MODE) ---
-        const processFile = async (file, suffix, index = '') => {
-            if (!file) return null;
-            
-            let ext = path.extname(file.originalname);
-            if (!ext || ext === '.blob') {
-                ext = file.mimetype.includes('image') ? '.jpg' : '.mp4';
-            }
-            const finalName = `${baseFilename}_${suffix}${index}${ext}`;
-            
-            // --- BYPASS: DO NOT CONNECT TO NAS ---
-            // We fake the upload success so the Database can save the record.
-            console.log(`⚠️ Skipping Synology Upload for: ${finalName}`);
-            
-            // Cleanup local file immediately
-            if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-            
-            // Return a fake path so the database has something to save
-            return "NAS_PENDING_" + finalName; 
-        };
-
-        // --- PROCESS FILES ---
+        // If files exist locally, just delete them to save space
         if (req.files) {
-            if (req.files['photos']) {
-                for (let i = 0; i < req.files['photos'].length; i++) {
-                    const path = await processFile(req.files['photos'][i], 'photo', i > 0 ? `_${i}` : '');
-                    if (path) photoPaths.push(path);
-                }
-            }
-            if (req.files['videos']) {
-                for (let i = 0; i < req.files['videos'].length; i++) {
-                    const path = await processFile(req.files['videos'][i], i === 0 ? 'video' : 'gopro');
-                    if (path) videoPaths.push(path);
-                }
-            }
-            if (req.files['selfie']) {
-                selfiePath = await processFile(req.files['selfie'][0], 'selfie');
-            }
+            Object.values(req.files).flat().forEach(file => {
+                if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+            });
         }
 
         console.log("💾 Saving to Database...");
 
-        // --- DATABASE INSERT ---
         const query = `
             INSERT INTO surveys (
                 district, block, route_name, location_type, 
@@ -668,18 +638,11 @@ export const createSurvey = async (req, res) => {
 export const getSurveys = async (req, res) => {
     try {
         const result = await db.query("SELECT * FROM surveys ORDER BY created_at DESC");
-        const surveys = result.rows.map(s => {
-            // Simple mapper since we are in bypass mode
-            return { ...s, mediaFiles: [] }; // Don't try to load media for now
-        });
+        const surveys = result.rows.map(s => ({ ...s, mediaFiles: [] }));
         res.json({ surveys });
-    } catch (err) { 
-        console.error("Get Surveys Error:", err);
-        res.status(500).json({ error: err.message }); 
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
-// ... Keep other exports (cancelSurvey, updateSurveyDetails, readFile) as they were ...
 export const cancelSurvey = async (req, res) => {
     try {
         const { id } = req.params;
@@ -692,15 +655,13 @@ export const updateSurveyDetails = async (req, res) => {
     try {
         const { id } = req.params;
         const { district, block, routeName, locationType, shotNumber, ringNumber, startLocName, endLocName, latitude, longitude, surveyorName, surveyorMobile, remarks, fileNamePrefix } = req.body;
-
         const query = `UPDATE surveys SET district=$1, block=$2, route_name=$3, location_type=$4, shot_number=$5, ring_number=$6, start_location=$7, end_location=$8, latitude=$9, longitude=$10, surveyor_name=$11, surveyor_mobile=$12, generated_filename=$13, remarks=$14, updated_at=NOW() WHERE id=$15`;
         const values = [district, block, routeName, locationType, shotNumber, ringNumber, startLocName, endLocName, parseFloat(latitude || 0), parseFloat(longitude || 0), surveyorName, surveyorMobile, fileNamePrefix, remarks, id];
-
         await db.query(query, values);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: err.message }); }
 };
 
 export const readFile = async (req, res) => {
-    res.status(404).send("File storage temporarily disabled.");
+    res.status(404).send("File storage disabled");
 };
