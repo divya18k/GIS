@@ -47,8 +47,8 @@ const pool = new Pool({
     port: process.env.DB_PORT || 5432,
     // SSL is REQUIRED for Render
     ssl: process.env.DB_HOST && process.env.DB_HOST !== 'localhost' 
-        ? { rejectUnauthorized: false } 
-        : false,
+    ? { rejectUnauthorized: false } 
+    : false,
 });
 
 pool.on('connect', () => {
