@@ -96,8 +96,8 @@ const Login = ({ onLogin }) => {
 
         // 1. Determine URL based on mode
         const endpoint = isLoginMode ? '/login' : '/register';
-        const url = `http://localhost:4000/users${endpoint}`;
-
+        // const url = `http://localhost:4000/users${endpoint}`;
+        const url = `https://gis-backend-9ajk.onrender.com/users${endpoint}`;
         // 2. Prepare Data (Match exactly what you did in Postman)
         const payload = { 
             username: username, 
