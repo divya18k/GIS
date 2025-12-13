@@ -18,10 +18,105 @@ const generateFilenameBase = (district, block, typeCode, shotNo) => {
     return `${d}_${b}_${typeCode}_SHOT${s}`;
 };
 
+// export const createSurvey = async (req, res) => {
+//     try {
+//         console.log("📥 Received Survey Submission...");
+//         console.log("Files received:", req.files ? Object.keys(req.files) : "NONE");
+
+//         const { 
+//             district, block, routeName, locationType, 
+//             shotNumber, ringNumber, startLocName, endLocName, 
+//             latitude, longitude, surveyorName, surveyorMobile, remarks,
+//             submittedBy, dateTime 
+//         } = req.body;
+
+//         const typeCode = TYPE_CODES[locationType] || 'OTH';
+//         const baseFilename = generateFilenameBase(district, block, typeCode, shotNumber);
+//         const metadata = { district, block, locationType, shotNumber, dateTime };
+
+//         const photoPaths = [];
+//         const videoPaths = [];
+//         let selfiePath = null;
+
+//         const processFile = async (file, suffix, index = '') => {
+//             if (!file) return null;
+
+//             let ext = path.extname(file.originalname);
+//             if (!ext || ext === '.blob') {
+//                 ext = file.mimetype.includes('image') ? '.jpg' : '.mp4';
+//             }
+
+//             const finalName = `${baseFilename}_${suffix}${index}${ext}`;
+//             const nasPath = await uploadToSynology(file.path, metadata, finalName);
+            
+//             // Cleanup
+//             if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+            
+//             return nasPath;
+//         };
+
+//         // Process Files
+//         if (req.files['photos']) {
+//             for (let i = 0; i < req.files['photos'].length; i++) {
+//                 const path = await processFile(req.files['photos'][i], 'photo', i > 0 ? `_${i}` : '');
+//                 if (path) photoPaths.push(path);
+//             }
+//         }
+
+//         if (req.files['videos']) {
+//             for (let i = 0; i < req.files['videos'].length; i++) {
+//                 const tag = i === 0 ? 'video' : 'gopro';
+//                 const path = await processFile(req.files['videos'][i], tag);
+//                 if (path) videoPaths.push(path);
+//             }
+//         }
+
+//         if (req.files['selfie']) {
+//             selfiePath = await processFile(req.files['selfie'][0], 'selfie');
+//         }
+
+//         // --- CHECK IF UPLOAD FAILED ---
+//         // If files were sent but paths are empty, upload failed.
+//         if (req.files['photos'] && photoPaths.length === 0) {
+//             console.error("⚠️ Photos were sent but Synology upload returned NULL");
+//         }
+
+//         const query = `
+//             INSERT INTO surveys (
+//                 district, block, route_name, location_type, 
+//                 shot_number, ring_number, start_location, end_location, 
+//                 latitude, longitude, surveyor_name, surveyor_mobile, 
+//                 generated_filename, submitted_by, survey_date,
+//                 photos, videos, selfie_path, remarks
+//             ) 
+//             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) 
+//             RETURNING *`;
+
+//         const values = [
+//             district, block, routeName, locationType, 
+//             shotNumber, ringNumber, startLocName, endLocName, 
+//             parseFloat(latitude || 0), parseFloat(longitude || 0), 
+//             surveyorName, surveyorMobile, baseFilename, submittedBy, dateTime,
+//             JSON.stringify(photoPaths),
+//             JSON.stringify(videoPaths), 
+//             selfiePath, remarks
+//         ];
+
+//         const result = await db.query(query, values);
+//         console.log("✅ DB Insert Success. ID:", result.rows[0].id);
+//         res.json({ success: true, survey: result.rows[0] });
+
+//     } catch (error) {
+//         console.error("❌ Create Survey Error:", error);
+//         res.status(500).json({ error: error.message });
+//     }
+// };
+
+// ... keep your imports ...
+
 export const createSurvey = async (req, res) => {
     try {
         console.log("📥 Received Survey Submission...");
-        console.log("Files received:", req.files ? Object.keys(req.files) : "NONE");
 
         const { 
             district, block, routeName, locationType, 
@@ -38,21 +133,29 @@ export const createSurvey = async (req, res) => {
         const videoPaths = [];
         let selfiePath = null;
 
+        // --- SAFE FILE PROCESSING ---
         const processFile = async (file, suffix, index = '') => {
             if (!file) return null;
+            
+            // Try uploading to NAS, but if it fails, just return the filename so DB saves anyway
+            try {
+                let ext = path.extname(file.originalname);
+                if (!ext || ext === '.blob') ext = file.mimetype.includes('image') ? '.jpg' : '.mp4';
+                const finalName = `${baseFilename}_${suffix}${index}${ext}`;
+                
+                // ATTEMPT UPLOAD
+                // If this fails (e.g., Render can't reach NAS), it jumps to catch
+                const nasPath = await uploadToSynology(file.path, metadata, finalName);
+                
+                // Cleanup local file
+                if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+                
+                return nasPath || finalName; // Return path if success, or name if failed
 
-            let ext = path.extname(file.originalname);
-            if (!ext || ext === '.blob') {
-                ext = file.mimetype.includes('image') ? '.jpg' : '.mp4';
+            } catch (uploadErr) {
+                console.error("⚠️ Synology Upload Failed (Skipping):", uploadErr.message);
+                return "UPLOAD_FAILED_" + file.originalname; // Save placeholder to DB
             }
-
-            const finalName = `${baseFilename}_${suffix}${index}${ext}`;
-            const nasPath = await uploadToSynology(file.path, metadata, finalName);
-            
-            // Cleanup
-            if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-            
-            return nasPath;
         };
 
         // Process Files
@@ -62,25 +165,17 @@ export const createSurvey = async (req, res) => {
                 if (path) photoPaths.push(path);
             }
         }
-
         if (req.files['videos']) {
             for (let i = 0; i < req.files['videos'].length; i++) {
-                const tag = i === 0 ? 'video' : 'gopro';
-                const path = await processFile(req.files['videos'][i], tag);
+                const path = await processFile(req.files['videos'][i], i === 0 ? 'video' : 'gopro');
                 if (path) videoPaths.push(path);
             }
         }
-
         if (req.files['selfie']) {
             selfiePath = await processFile(req.files['selfie'][0], 'selfie');
         }
 
-        // --- CHECK IF UPLOAD FAILED ---
-        // If files were sent but paths are empty, upload failed.
-        if (req.files['photos'] && photoPaths.length === 0) {
-            console.error("⚠️ Photos were sent but Synology upload returned NULL");
-        }
-
+        // --- DATABASE INSERT ---
         const query = `
             INSERT INTO surveys (
                 district, block, route_name, location_type, 
@@ -108,10 +203,12 @@ export const createSurvey = async (req, res) => {
 
     } catch (error) {
         console.error("❌ Create Survey Error:", error);
-        res.status(500).json({ error: error.message });
+        // Show exact error in the popup on phone
+        res.status(500).json({ error: "DB Error: " + error.message }); 
     }
 };
 
+// ... keep getSurveys and other functions ...
 export const getSurveys = async (req, res) => {
     try {
         const result = await db.query("SELECT * FROM surveys ORDER BY created_at DESC");
