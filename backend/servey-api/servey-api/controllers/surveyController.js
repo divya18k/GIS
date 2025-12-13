@@ -558,6 +558,7 @@
 import { db } from '../config/db.js';
 import fs from 'fs';
 import path from 'path';
+import { uploadToSynology, downloadFromSynology } from '../services/synologyService.js';
 
 const TYPE_CODES = {
     "HDD Start Point": "HSP", "HDD End Point": "HEP", "Chamber Location": "CHM",
@@ -583,24 +584,70 @@ export const createSurvey = async (req, res) => {
             submittedBy, dateTime 
         } = req.body;
 
-        const baseFilename = generateFilenameBase(district, block, TYPE_CODES[locationType] || 'OTH', shotNumber);
-        
-        // --- BYPASS MODE ---
-        // We are NOT connecting to Synology. We are just saving text.
-        // This guarantees the code will not crash due to network issues.
-        const photoPaths = ["NAS_DISABLED_FOR_TESTING.jpg"];
-        const videoPaths = [];
-        let selfiePath = "NAS_DISABLED.jpg";
+        const typeCode = TYPE_CODES[locationType] || 'OTH';
+        const baseFilename = generateFilenameBase(district, block, typeCode, shotNumber);
+        const metadata = { district, block, locationType, shotNumber, dateTime };
 
-        // Clean up temp files from Render server so it doesn't get full
-        if (req.files) {
-            Object.values(req.files).flat().forEach(file => {
+        const photoPaths = [];
+        const videoPaths = [];
+        let selfiePath = null;
+
+        // --- PRODUCTION FILE PROCESSING ---
+        const processFile = async (file, suffix, index = '') => {
+            if (!file) return null;
+            
+            try {
+                let ext = path.extname(file.originalname);
+                if (!ext || ext === '.blob') {
+                    ext = file.mimetype.includes('image') ? '.jpg' : '.mp4';
+                }
+                const finalName = `${baseFilename}_${suffix}${index}${ext}`;
+                
+                console.log(`🚀 Uploading to Synology: ${finalName}`);
+
+                // 1. ATTEMPT UPLOAD TO SYNOLOGY
+                const nasPath = await uploadToSynology(file.path, metadata, finalName);
+                
+                // 2. Cleanup local file after attempt to save space on Render
                 if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
-            });
+                
+                // 3. Check result
+                if (nasPath) {
+                    return nasPath;
+                } else {
+                    // If NAS upload returns null (login failed or network issue)
+                    console.error("⚠️ NAS returned null path. Saving filename only.");
+                    return "FAILED_UPLOAD_" + finalName; 
+                }
+
+            } catch (uploadErr) {
+                console.error(`⚠️ Upload Error for ${file.originalname}:`, uploadErr.message);
+                return "ERROR_" + file.originalname; 
+            }
+        };
+
+        // --- PROCESS ALL FILES ---
+        if (req.files) {
+            if (req.files['photos']) {
+                for (let i = 0; i < req.files['photos'].length; i++) {
+                    const path = await processFile(req.files['photos'][i], 'photo', i > 0 ? `_${i}` : '');
+                    if (path) photoPaths.push(path);
+                }
+            }
+            if (req.files['videos']) {
+                for (let i = 0; i < req.files['videos'].length; i++) {
+                    const path = await processFile(req.files['videos'][i], i === 0 ? 'video' : 'gopro');
+                    if (path) videoPaths.push(path);
+                }
+            }
+            if (req.files['selfie']) {
+                selfiePath = await processFile(req.files['selfie'][0], 'selfie');
+            }
         }
 
-        console.log("💾 Saving data to Database...");
+        console.log("💾 Saving to Database...");
 
+        // --- DATABASE INSERT ---
         const query = `
             INSERT INTO surveys (
                 district, block, route_name, location_type, 
@@ -627,17 +674,55 @@ export const createSurvey = async (req, res) => {
         res.json({ success: true, survey: result.rows[0] });
 
     } catch (error) {
-        console.error("❌ Database Error:", error);
-        res.status(500).json({ error: "DB Error: " + error.message });
+        console.error("❌ Critical Server Error:", error);
+        res.status(500).json({ error: "Server Error: " + error.message });
     }
 };
 
 export const getSurveys = async (req, res) => {
     try {
         const result = await db.query("SELECT * FROM surveys ORDER BY created_at DESC");
-        const surveys = result.rows.map(s => ({ ...s, mediaFiles: [] }));
+        const surveys = result.rows.map(s => {
+            const mediaFiles = [];
+            
+            const parseMedia = (data, typePrefix) => {
+                if (Array.isArray(data)) {
+                    data.forEach(url => mediaFiles.push({ type: typePrefix, url }));
+                } else if (typeof data === 'string') {
+                    try {
+                        const parsed = JSON.parse(data);
+                        if (Array.isArray(parsed)) parsed.forEach(url => mediaFiles.push({ type: typePrefix, url }));
+                        else mediaFiles.push({ type: typePrefix, url: parsed });
+                    } catch (e) {
+                        mediaFiles.push({ type: typePrefix, url: data });
+                    }
+                }
+            };
+
+            parseMedia(s.photos, 'photo');
+            
+            if (s.videos) {
+                let videoData = s.videos;
+                if (typeof videoData === 'string') {
+                    try { videoData = JSON.parse(videoData); } catch(e) {}
+                }
+                if (Array.isArray(videoData)) {
+                    videoData.forEach(v => {
+                        const type = v.includes('gopro') ? 'gopro' : 'video';
+                        mediaFiles.push({ type, url: v });
+                    });
+                }
+            }
+
+            if (s.selfie_path) mediaFiles.push({ type: 'selfie', url: s.selfie_path });
+
+            return { ...s, mediaFiles };
+        });
         res.json({ surveys });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { 
+        console.error("Get Surveys Error:", err);
+        res.status(500).json({ error: err.message }); 
+    }
 };
 
 export const cancelSurvey = async (req, res) => {
@@ -652,7 +737,15 @@ export const updateSurveyDetails = async (req, res) => {
     try {
         const { id } = req.params;
         const { district, block, routeName, locationType, shotNumber, ringNumber, startLocName, endLocName, latitude, longitude, surveyorName, surveyorMobile, remarks, fileNamePrefix } = req.body;
-        const query = `UPDATE surveys SET district=$1, block=$2, route_name=$3, location_type=$4, shot_number=$5, ring_number=$6, start_location=$7, end_location=$8, latitude=$9, longitude=$10, surveyor_name=$11, surveyor_mobile=$12, generated_filename=$13, remarks=$14, updated_at=NOW() WHERE id=$15`;
+        
+        const query = `
+            UPDATE surveys 
+            SET district=$1, block=$2, route_name=$3, location_type=$4,
+                shot_number=$5, ring_number=$6, start_location=$7, end_location=$8,
+                latitude=$9, longitude=$10, surveyor_name=$11, surveyor_mobile=$12,
+                generated_filename=$13, remarks=$14, updated_at=NOW()
+            WHERE id=$15`;
+
         const values = [district, block, routeName, locationType, shotNumber, ringNumber, startLocName, endLocName, parseFloat(latitude || 0), parseFloat(longitude || 0), surveyorName, surveyorMobile, fileNamePrefix, remarks, id];
         await db.query(query, values);
         res.json({ success: true });
@@ -660,5 +753,7 @@ export const updateSurveyDetails = async (req, res) => {
 };
 
 export const readFile = async (req, res) => {
-    res.status(404).send("File storage disabled");
+    const filePath = req.query.path;
+    if (!filePath) return res.status(400).send('No path provided');
+    await downloadFromSynology(filePath, res);
 };
