@@ -776,7 +776,7 @@ const TYPE_CODES = {
 };
 
 // --- CRITICAL FIX: CHANGED FROM LOCALHOST TO RENDER ---
-const API_BASE = 'https://gis-kpj2.onrender.com';
+const API_BASE = 'https://gis-backend-9ajk.onrender.com';
 
 // --- HELPER FUNCTIONS ---
 const getRingPath = (start, end, offsetFactor) => { 
