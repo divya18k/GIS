@@ -112,7 +112,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// --- CORS: Allow Render Frontend & Localhost ---
+// --- CORS Configuration ---
 app.use(cors({
     origin: ["http://localhost:3000", "https://gis-kpj2.onrender.com"],
     credentials: true
@@ -127,12 +127,16 @@ app.use('/uploads', express.static(UPLOAD_BASE));
 app.use('/surveys', surveyRoutes);
 app.use('/users', userRoutes);
 
-app.get('/', (req, res) => res.json({ ok: true, message: "GIS Backend is Live!" }));
+app.get('/', (req, res) => res.json({ ok: true, message: "Backend is running!" }));
 
-// --- AUTOMATIC DATABASE SETUP (Fixed Schema) ---
+// --- AUTOMATIC DATABASE SETUP ---
 const initDB = async () => {
     try {
         console.log("🛠️ Checking database tables...");
+
+        // *** THIS LINE FIXES YOUR ERROR ***
+        // It deletes the "bad" table so the correct one can be created
+        await pool.query('DROP TABLE IF EXISTS surveys'); 
 
         // 1. Create Users Table
         await pool.query(`
@@ -144,7 +148,7 @@ const initDB = async () => {
             );
         `);
 
-        // 2. Create Surveys Table (MATCHING YOUR CONTROLLER EXACTLY)
+        // 2. Create Surveys Table (With ALL correct columns now)
         await pool.query(`
             CREATE TABLE IF NOT EXISTS surveys (
                 id SERIAL PRIMARY KEY,
@@ -171,7 +175,7 @@ const initDB = async () => {
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
-        console.log("✅ Database tables are ready!");
+        console.log("✅ Database tables are reset and ready!");
     } catch (err) {
         console.error("❌ Database setup failed:", err.message);
     }
